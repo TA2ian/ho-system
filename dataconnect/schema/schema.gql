@@ -1,0 +1,96 @@
+# HO Network SQL Connect - GraphQL Schema Definition (RTL / Arabic Core)
+# Version: 1.0 (Phase 1 Baseline)
+
+# =========================================================================
+# 1. IDENTITY & WORKFORCE DOMAINS (إدارة الهوية والموظفين والصلاحيات)
+# =========================================================================
+
+type User @table(name: "users", key: "id") {
+  id: Int!
+  uid: String! @unique
+  email: String!
+  name: String
+  role: String! # e.g. SUPER_ADMIN, ADMIN, ACCOUNTANT, MEDIA_MANAGER, etc.
+  status: String! # ACTIVE, INACTIVE
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+}
+
+# =========================================================================
+# 2. CRM DOMAIN (إدارة علاقات العملاء)
+# =========================================================================
+
+type Customer @table(name: "customers", key: "id") {
+  id: Int!
+  name: String!
+  email: String
+  phone: String
+  address: String
+  notes: String
+  status: String! # LEAD, ACTIVE, INACTIVE, ARCHIVED
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+}
+
+# =========================================================================
+# 3. FUTURE DOMAINS - DESIGN BLUEPRINT (مخططات الوحدات المستقبلية)
+# =========================================================================
+
+# --- CATALOG DOMAIN (كتالوج الخدمات والمنتجات) ---
+# To be added:
+# type Product @table(name: "products", key: "id") {
+#   id: Int!
+#   name: String!
+#   sku: String! @unique
+#   description: String
+#   category: String
+#   type: String! # PRODUCT, SERVICE, MEDIA_BUYING, DELIVERY
+#   price: Float!
+#   cost: Float!
+#   status: String!
+# }
+
+# --- SALES DOMAIN (طلبات وعروض المبيعات) ---
+# To be added:
+# type SalesOrder @table(name: "sales_orders", key: "id") {
+#   id: Int!
+#   customerId: Int!
+#   orderNumber: String! @unique
+#   status: String! # DRAFT, CONFIRMED, etc.
+#   totalAmount: Float!
+# }
+
+# --- MEDIA BUYING DOMAIN (الحملات وشراء المساحات الإعلانية) ---
+# To be added:
+# type Campaign @table(name: "campaigns", key: "id") {
+#   id: Int!
+#   name: String!
+#   budget: Float!
+#   actualSpend: Float!
+# }
+
+# --- DELIVERY DOMAIN (إرسال الشحنات والعهدة والتوصيل) ---
+# To be added:
+# type Delivery @table(name: "deliveries", key: "id") {
+#   id: Int!
+#   status: String!
+# }
+
+# --- FINANCE & ACCOUNTING DOMAINS (المالية والحسابات المدينة ودفتر الأستاذ) ---
+# To be added:
+# type Invoice @table(name: "invoices", key: "id") {
+#   id: Int!
+#   invoiceNumber: String! @unique
+# }
+# type Receivable @table(name: "receivables", key: "id") {
+#   id: Int!
+#   remainingAmount: Float!
+# }
+
+# --- SYSTEM DOMAIN (سجل العمليات والتدقيق غير القابل للتعديل) ---
+# To be added:
+# type AuditLog @table(name: "audit_logs", key: "id") {
+#   id: Int!
+#   action: String!
+#   timestamp: Timestamp!
+# }

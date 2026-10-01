@@ -1,0 +1,47 @@
+# HO Network SQL Connect - Mutations (العمليات وإدخال البيانات المالي والتشغيلي)
+
+# إدراج مستخدم جديد ومطابقة الهوية (Identity Mapping)
+mutation CreateUser($uid: String!, $email: String!, $name: String, $role: String!, $status: String!) {
+  user_insert(data: {
+    uid: $uid,
+    email: $email,
+    name: $name,
+    role: $role,
+    status: $status
+  })
+}
+
+# تحديث رتبة الصلاحية للموظف (Authorization Control)
+mutation UpdateUserRole($uid: String!, $role: String!) {
+  user_update(
+    where: { uid: { eq: $uid } },
+    data: { role: $role }
+  )
+}
+
+# إدراج عميل جديد في إدارة علاقات العملاء (CRM)
+mutation CreateCustomer($name: String!, $email: String, $phone: String, $address: String, $notes: String, $status: String!) {
+  customer_insert(data: {
+    name: $name,
+    email: $email,
+    phone: $phone,
+    address: $address,
+    notes: $notes,
+    status: $status
+  })
+}
+
+# تحديث بيانات العميل الشخصية وتصنيفه
+mutation UpdateCustomer($id: Int!, $name: String!, $email: String, $phone: String, $address: String, $notes: String, $status: String!) {
+  customer_update(
+    where: { id: { eq: $id } },
+    data: {
+      name: $name,
+      email: $email,
+      phone: $phone,
+      address: $address,
+      notes: $notes,
+      status: $status
+    }
+  )
+}

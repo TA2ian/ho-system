@@ -1,0 +1,12 @@
+specVersion: "v1alpha"
+serviceId: "ho-ledger-service"
+location: "europe-west2"
+schema:
+  source: "./schema"
+  datasource:
+    postgresql:
+      database: "kanaan-credit-app"
+      cloudSql:
+        instanceId: "ho-network-db"
+connectorDirs:
+  - "./connector"
