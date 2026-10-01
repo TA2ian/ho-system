@@ -6,14 +6,14 @@
 # =========================================================================
 
 type User @table(name: "users", key: "id") {
-  id: Int!
+  id: Int! @col(dataType: "serial")
   uid: String! @unique
   email: String!
   name: String
   role: String! # e.g. SUPER_ADMIN, ADMIN, ACCOUNTANT, MEDIA_MANAGER, etc.
   status: String! # ACTIVE, INACTIVE
-  createdAt: Timestamp!
-  updatedAt: Timestamp!
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
 }
 
 # =========================================================================
@@ -21,15 +21,15 @@ type User @table(name: "users", key: "id") {
 # =========================================================================
 
 type Customer @table(name: "customers", key: "id") {
-  id: Int!
+  id: Int! @col(dataType: "serial")
   name: String!
   email: String
   phone: String
   address: String
   notes: String
   status: String! # LEAD, ACTIVE, INACTIVE, ARCHIVED
-  createdAt: Timestamp!
-  updatedAt: Timestamp!
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
 }
 
 # =========================================================================

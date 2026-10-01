@@ -13,7 +13,7 @@ mutation CreateUser($uid: String!, $email: String!, $name: String, $role: String
 
 # تحديث رتبة الصلاحية للموظف (Authorization Control)
 mutation UpdateUserRole($uid: String!, $role: String!) {
-  user_update(
+  user_updateMany(
     where: { uid: { eq: $uid } },
     data: { role: $role }
   )
@@ -34,7 +34,7 @@ mutation CreateCustomer($name: String!, $email: String, $phone: String, $address
 # تحديث بيانات العميل الشخصية وتصنيفه
 mutation UpdateCustomer($id: Int!, $name: String!, $email: String, $phone: String, $address: String, $notes: String, $status: String!) {
   customer_update(
-    where: { id: { eq: $id } },
+    key: { id: $id },
     data: {
       name: $name,
       email: $email,

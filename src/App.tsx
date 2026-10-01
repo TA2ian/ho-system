@@ -9,6 +9,11 @@ import { auth, googleAuthProvider } from './lib/firebase.ts';
 import { usePWAInstall } from './lib/usePWAInstall.ts';
 import { useOnlineStatus } from './lib/useOnlineStatus.ts';
 import {
+  listCustomersData,
+  createNewCustomer,
+  editCustomerData,
+} from './data/customers/customerService.ts';
+import {
   Users,
   User,
   ShoppingBag,
@@ -225,8 +230,8 @@ export default function App() {
       const token = await fbUser.getIdToken();
       const headers = { Authorization: `Bearer ${token}` };
 
-      const custRes = await fetch('/api/customers', { headers });
-      if (custRes.ok) setCustomers(await custRes.json());
+      const sqlCustomers = await listCustomersData();
+      setCustomers(sqlCustomers);
 
       const prodRes = await fetch('/api/products', { headers });
       if (prodRes.ok) setProducts(await prodRes.json());
@@ -284,31 +289,34 @@ export default function App() {
     }, 6000);
   };
 
-  // معالجة حساب العميل (حفظ أو تعديل)
+  // معالجة حساب العميل (حفظ أو تعديل) - مسار هجين مبني بالكامل على SQL Connect
   const saveCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fbUser) return;
     try {
-      const token = await fbUser.getIdToken();
       const isEdit = !!editingCustomer;
-      const url = isEdit ? `/api/customers/${editingCustomer.id}` : '/api/customers';
-      const method = isEdit ? 'PUT' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(customerForm),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'فشلت عملية حفظ العميل');
+      if (isEdit) {
+        await editCustomerData({
+          id: editingCustomer.id,
+          name: customerForm.name,
+          email: customerForm.email,
+          phone: customerForm.phone,
+          address: customerForm.address,
+          notes: customerForm.notes,
+          status: customerForm.status,
+        });
+      } else {
+        await createNewCustomer({
+          name: customerForm.name,
+          email: customerForm.email,
+          phone: customerForm.phone,
+          address: customerForm.address,
+          notes: customerForm.notes,
+          status: customerForm.status,
+        });
       }
 
-      showNotification(isEdit ? 'تم تحديث البيانات الشخصية للعميل بنجاح.' : 'تم تسجيل العميل الجديد بنجاح في قاعدة البيانات.');
+      showNotification(isEdit ? 'تم تحديث البيانات الشخصية للعميل بنجاح عبر SQL Connect.' : 'تم تسجيل العميل الجديد بنجاح في قاعدة بيانات Cloud SQL عبر SQL Connect.');
       setShowCustomerModal(false);
       setEditingCustomer(null);
       setCustomerForm({ name: '', email: '', phone: '', address: '', notes: '', status: 'LEAD' });
@@ -1183,6 +1191,28 @@ export default function App() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+
+                {/* لوحة حالة النظام للمسؤولين - ميزة إدارية اختيارية وحقائق تقنية فنية */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 mt-6 text-right">
+                  <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                    <Database className="h-5 w-5 text-amber-500" />
+                    <span>حالة البنية التحتية والربط الفني للمدراء</span>
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                    <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                      <p className="text-slate-400 font-medium">حالة طبقة البيانات لخدمة العملاء</p>
+                      <p className="text-slate-900 font-bold mt-1">Firebase SQL Connect SDK (نشط)</p>
+                    </div>
+                    <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                      <p className="text-slate-400 font-medium">بوابة الهوية والمصادقة</p>
+                      <p className="text-slate-900 font-bold mt-1">Firebase Authentication</p>
+                    </div>
+                    <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                      <p className="text-slate-400 font-medium">لغة واجهة النظام الحالية</p>
+                      <p className="text-slate-900 font-bold mt-1">العربية الأولية / اتجاه RTL</p>
+                    </div>
                   </div>
                 </div>
 

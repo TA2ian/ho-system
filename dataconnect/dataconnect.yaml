@@ -5,8 +5,8 @@ schema:
   source: "./schema"
   datasource:
     postgresql:
-      database: "kanaan-credit-app"
+      database: "postgres"
       cloudSql:
-        instanceId: "ho-network-db"
+        instanceId: "ai-studio-e066c50a"
 connectorDirs:
   - "./connector"
