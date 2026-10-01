@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <rect width="512" height="512" rx="128" fill="#0f172a"/>
+  <!-- Elegant geometric stylized HO -->
+  <path d="M140 160v192M240 160v192M140 256h100" stroke="#f59e0b" stroke-width="32" stroke-linecap="round"/>
+  <circle cx="360" cy="256" r="80" stroke="#f59e0b" stroke-width="32" fill="none"/>
+</svg>
