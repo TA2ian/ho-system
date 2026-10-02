@@ -75,9 +75,9 @@ export async function openCollection(
   return session;
 }
 
-export async function getCollection(db: Database, sessionId: string, actorId: string) {
+export async function getCollection(db: Database, sessionId: string, actorId: string, allowOtherDrivers = false) {
   const session = await getSession(db, sessionId);
-  assertDriverAccess(session, actorId);
+  if (!allowOtherDrivers) assertDriverAccess(session, actorId);
 
   const linked = await db.select({
     id: driverCollectionPayments.id,
@@ -108,8 +108,13 @@ export async function addCollectionPayment(
   input: z.infer<typeof addCollectionPaymentInputSchema>,
   context: { actorId: string; requestId: string; idempotencyKey: string }
 ) {
-  const session = await getSession(db, sessionId);
-  assertDriverAccess(session, context.actorId);
+  const rows = await db.execute(sql`SELECT id, driver_user_id, status, opened_at, opened_by, closed_at, closed_by, notes, created_at, updated_at FROM driver_collection_sessions WHERE id = ${sessionId}::uuid FOR UPDATE`);
+  const session = rows.rows[0] as {
+    id: string; driver_user_id: string; status: string; opened_at: Date; opened_by: string;
+    closed_at: Date | null; closed_by: string | null; notes: string | null; created_at: Date; updated_at: Date;
+  } | undefined;
+  if (!session) throw new ApplicationError("COLLECTION_NOT_FOUND", 404, "جلسة التحصيل غير موجودة");
+  if (session.driver_user_id !== context.actorId) throw new ApplicationError("COLLECTION_DRIVER_MISMATCH", 403, "جلسة التحصيل تخص سائقاً آخر");
   if (session.status !== "open") {
     throw new ApplicationError("COLLECTION_CLOSED", 409, "جلسة التحصيل مغلقة");
   }
