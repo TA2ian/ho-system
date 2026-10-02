@@ -562,7 +562,7 @@ export function buildApp(dependencies: {
     if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
     assertPermission(request.principal, "collections.read");
     if (!/^[0-9a-fA-F-]{36}$/.test(request.params.id)) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "معرّف جلسة التحصيل غير صالح" });
-    return reply.send({ data: await getCollection(dependencies.db, request.params.id, request.principal.userId) });
+    return reply.send({ data: await getCollection(dependencies.db, request.params.id, request.principal.userId, !request.principal.roles.has("driver")) });
   });
 
   app.post<{ Params: { id: string } }>("/api/v1/driver-collections/:id/payments", async (request, reply) => {
