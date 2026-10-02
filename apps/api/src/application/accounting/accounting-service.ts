@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, gte, lte } from "drizzle-orm";
+import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
 import { Decimal } from "decimal.js";
 import { z } from "zod";
 import type { Database } from "../../db/client.js";

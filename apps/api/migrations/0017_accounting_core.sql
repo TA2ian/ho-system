@@ -113,12 +113,6 @@ CREATE TRIGGER journal_lines_immutable
 BEFORE INSERT OR UPDATE OR DELETE ON journal_lines
 FOR EACH ROW EXECUTE FUNCTION prevent_posted_journal_mutation();
 
-INSERT INTO accounting_periods (id, period_start, period_end, status, created_by)
-SELECT gen_random_uuid(), make_date(2026, m, 1), (make_date(2026, m, 1) + INTERVAL '1 month - 1 day')::date, 'open',
-       (SELECT id FROM users ORDER BY created_at LIMIT 1)
-FROM generate_series(1,12) AS m
-WHERE NOT EXISTS (SELECT 1 FROM accounting_periods WHERE period_start = make_date(2026, m, 1));
-
 WITH seed(code,name,account_type,normal_balance) AS (
   VALUES
     ('1000','Cash','asset','debit'),
