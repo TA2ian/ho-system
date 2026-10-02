@@ -338,11 +338,11 @@ export function buildApp(dependencies: {
     return reply.status(result.status).send(result.body);
   }
 
-  app.post("/api/v1/sales-orders/:id/confirm", async (request, reply) => {
+  app.post<{ Params: { id: string } }>("/api/v1/sales-orders/:id/confirm", async (request, reply) => {
     return handleSalesOrderTransition(request, reply, "confirmed");
   });
 
-  app.post("/api/v1/sales-orders/:id/cancel", async (request, reply) => {
+  app.post<{ Params: { id: string } }>("/api/v1/sales-orders/:id/cancel", async (request, reply) => {
     return handleSalesOrderTransition(request, reply, "cancelled");
   });
 
