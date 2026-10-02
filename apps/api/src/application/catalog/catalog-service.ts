@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { Decimal } from "decimal.js";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "../../db/client.js";
@@ -42,9 +43,9 @@ function toItem(row: typeof catalogItems.$inferSelect): CatalogItem {
 }
 
 function assertSaleNotBelowCost(costPrice: string, salePrice: string): void {
-  const cost = Number(costPrice);
-  const sale = Number(salePrice);
-  if (!Number.isFinite(cost) || !Number.isFinite(sale) || sale < cost) {
+  const cost = new Decimal(costPrice);
+  const sale = new Decimal(salePrice);
+  if (sale.lt(cost)) {
     throw new ApplicationError(
       "INVALID_CATALOG_PRICES",
       400,
