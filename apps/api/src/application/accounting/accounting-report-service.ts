@@ -10,7 +10,7 @@ export async function trialBalance(db:Database,asOfDate:string){
     FROM chart_of_accounts coa
     LEFT JOIN journal_lines jl ON jl.account_id=coa.id
     LEFT JOIN journal_entries je ON je.id=jl.journal_entry_id AND je.status='posted' AND je.entry_date<=${asOfDate}
-    WHERE coa.is_active=true
+    WHERE coa.is_active=true AND (je.id IS NOT NULL OR jl.id IS NULL)
     GROUP BY coa.id,coa.code,coa.name,coa.account_type,coa.normal_balance
     ORDER BY coa.code
   `);

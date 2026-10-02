@@ -23,6 +23,8 @@ import { campaignStatusInputSchema, createCampaign, createCampaignInputSchema, g
 import { completeEmployeeTask, createCompensationRule, createCompensationRuleInputSchema, createEmployeeTask, createEmployeeTaskInputSchema, listCompensationRules, listEmployeeTasks } from "./application/employees/employee-service.js";
 import { createExpense, createExpenseInputSchema, listExpenses, voidExpense, voidExpenseInputSchema } from "./application/expenses/expense-service.js";
 import { closePeriod, createAccount, createAccountInputSchema, createJournal, createJournalInputSchema, createPeriod, createPeriodInputSchema, createReversalInputSchema, getJournal, listAccounts, listPeriods, postJournal, reverseJournal } from "./application/accounting/accounting-service.js";
+import { generalLedger, trialBalance } from "./application/accounting/accounting-report-service.js";
+import { getLatestExchangeRate, setExchangeRate, setExchangeRateInputSchema } from "./application/exchange/exchange-service.js";
 
 export function buildApp(dependencies: {
   db: Database;
@@ -596,6 +598,28 @@ export function buildApp(dependencies: {
     if (!/^[0-9a-fA-F-]{36}$/.test(request.params.id)) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "معرّف طلب التوصيل غير صالح" });
     const privileged = request.principal.permissions.has("delivery.manage");
     return reply.send({ data: await getDeliveryOrder(dependencies.db, request.params.id, request.principal.userId, privileged) });
+  });
+
+  app.get("/api/v1/exchange-rates",async(request,reply)=>{
+    if(!request.principal)return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});assertPermission(request.principal,"exchange_rates.read");
+    const q=request.query as {baseCurrencyCode?:string;quoteCurrencyCode?:string};if(!q.baseCurrencyCode||!q.quoteCurrencyCode)return reply.status(400).send({error:"VALIDATION_ERROR",message:"يجب تحديد العملة الأساسية وعملة الاقتباس"});
+    return reply.send({data:await getLatestExchangeRate(dependencies.db,q.baseCurrencyCode.toUpperCase(),q.quoteCurrencyCode.toUpperCase())});
+  });
+  app.post("/api/v1/exchange-rates",async(request,reply)=>{
+    if(!request.principal)return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});assertPermission(request.principal,"exchange_rates.manage");
+    const parsed=setExchangeRateInputSchema.safeParse(request.body);if(!parsed.success)return reply.status(400).send({error:"VALIDATION_ERROR",message:"سعر الصرف غير صالح",issues:parsed.error.flatten()});
+    const key=request.headers["idempotency-key"];if(typeof key!=="string"||key.trim().length<16||key.length>255)return reply.status(400).send({error:"IDEMPOTENCY_KEY_REQUIRED",message:"يجب إرسال مفتاح Idempotency-Key صالح"});
+    const idemKey=key.trim(),scope=`exchange-rate:create:${request.principal.userId}`,hash=hashRequestBody(parsed.data);
+    const result=await withTransaction(dependencies.pool,async tx=>{const idem=await beginIdempotency(tx,scope,idemKey,hash);if(idem.kind==="replay")return idem;if(idem.kind==="conflict")throw new ApplicationError(idem.reason==="KEY_REUSED"?"IDEMPOTENCY_KEY_REUSED":"IDEMPOTENCY_IN_PROGRESS",409,idem.reason==="KEY_REUSED"?"تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة":"الطلب نفسه قيد المعالجة");const created=await setExchangeRate(tx,parsed.data,{actorId:request.principal!.userId,requestId:request.id,idempotencyKey:idemKey});const body={data:created};await completeIdempotency(tx,idem.id,201,body);return {kind:"new" as const,status:201,body};});return reply.status(result.status).send(result.body);
+  });
+  app.get("/api/v1/accounting/reports/trial-balance",async(request,reply)=>{
+    if(!request.principal)return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});assertPermission(request.principal,"accounting.journal.read");
+    const q=request.query as {asOfDate?:string};if(!q.asOfDate||!/^d{4}-d{2}-d{2}$/.test(q.asOfDate))return reply.status(400).send({error:"VALIDATION_ERROR",message:"يجب تحديد تاريخ صحيح"});return reply.send({data:await trialBalance(dependencies.db,q.asOfDate)});
+  });
+  app.get<{Params:{accountId:string}}>("/api/v1/accounting/reports/ledger/:accountId",async(request,reply)=>{
+    if(!request.principal)return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});assertPermission(request.principal,"accounting.journal.read");
+    if(!/^[0-9a-fA-F-]{36}$/.test(request.params.accountId))return reply.status(400).send({error:"VALIDATION_ERROR",message:"معرّف الحساب غير صالح"});
+    const q=request.query as {startDate?:string;endDate?:string};if(!q.startDate||!q.endDate||!/^d{4}-d{2}-d{2}$/.test(q.startDate)||!/^d{4}-d{2}-d{2}$/.test(q.endDate))return reply.status(400).send({error:"VALIDATION_ERROR",message:"يجب تحديد نطاق تاريخ صحيح"});return reply.send({data:await generalLedger(dependencies.db,request.params.accountId,q.startDate,q.endDate)});
   });
 
   app.get("/api/v1/accounting/periods", async (request, reply) => {
