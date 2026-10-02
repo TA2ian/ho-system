@@ -138,6 +138,78 @@ export async function reversePaymentRecorded(
 
 
 
+
+export async function postCampaignSpendRecorded(
+  db: Database,
+  spendId: string,
+  context: { actorId: string; requestId: string; idempotencyKey: string }
+): Promise<string> {
+  const rows = await db.execute(sql`
+    SELECT cse.id, cse.campaign_id, cse.amount, cse.currency_code, cse.spent_at, c.customer_id
+    FROM campaign_spend_entries cse
+    JOIN campaigns c ON c.id = cse.campaign_id
+    WHERE cse.id = ${spendId}::uuid
+    FOR UPDATE
+  `);
+  const spend = rows.rows[0] as {
+    id: string; campaign_id: string; amount: string; currency_code: string; spent_at: Date; customer_id: string;
+  } | undefined;
+  if (!spend) throw new Error("Campaign spend not found");
+  const accounts = await accountIds(db, ["5100", "2000"]);
+  const rate = await resolveRateToBase(db, spend.currency_code, "USD");
+  return postOperationalJournal(db, {
+    entryDate: spend.spent_at.toISOString().slice(0, 10),
+    currencyCode: spend.currency_code,
+    exchangeRateToBase: rate,
+    description: "Advertising spend " + spend.id,
+    sourceType: "campaign_spend",
+    sourceId: spend.id,
+    sourceEventKey: "campaign-spend:" + spend.id + ":recorded",
+    lines: [
+      { accountId: accounts.get("5100")!, debitAmount: spend.amount, description: "Advertising expense", customerId: spend.customer_id },
+      { accountId: accounts.get("2000")!, creditAmount: spend.amount, description: "Advertising payable", customerId: spend.customer_id }
+    ]
+  }, context);
+}
+
+export async function postEmployeeCompensation(
+  db: Database,
+  taskId: string,
+  context: { actorId: string; requestId: string; idempotencyKey: string }
+): Promise<string> {
+  const rows = await db.execute(sql`
+    SELECT id, employee_user_id, compensation_amount, currency_code, completed_at
+    FROM employee_tasks WHERE id = ${taskId}::uuid FOR UPDATE
+  `);
+  const task = rows.rows[0] as {
+    id: string; employee_user_id: string; compensation_amount: string | null; currency_code: string; completed_at: Date | null;
+  } | undefined;
+  if (!task || !task.compensation_amount || !task.completed_at) throw new Error("Completed employee compensation not found");
+  const accounts = await accountIds(db, ["5200", "2200"]);
+  const rate = await resolveRateToBase(db, task.currency_code, "USD");
+  return postOperationalJournal(db, {
+    entryDate: task.completed_at.toISOString().slice(0, 10),
+    currencyCode: task.currency_code,
+    exchangeRateToBase: rate,
+    description: "Employee compensation " + task.id,
+    sourceType: "employee_task",
+    sourceId: task.id,
+    sourceEventKey: "employee-task:" + task.id + ":completed",
+    lines: [
+      { accountId: accounts.get("5200")!, debitAmount: task.compensation_amount, description: "Employee compensation expense", customerId: null },
+      { accountId: accounts.get("2200")!, creditAmount: task.compensation_amount, description: "Employee compensation payable", customerId: null }
+    ]
+  }, context);
+}
+
+export async function reverseCampaignSpend(
+  db: Database,
+  spendId: string,
+  context: { actorId: string; requestId: string; idempotencyKey: string }
+): Promise<string> {
+  return reverseSourceJournal(db, "campaign-spend:" + spendId + ":recorded", context);
+}
+
 export async function postExpenseRecorded(
   db: Database,
   expenseId: string,
