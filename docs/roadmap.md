@@ -11,11 +11,13 @@
 - CI
 
 ## Phase 1 — Persistence
-- PostgreSQL
-- Migration runner
-- Database connection lifecycle
-- Transaction abstraction
+- PostgreSQL connection pool and lifecycle
+- Explicit SQL migration runner with advisory locking and checksums
+- Currency registry and exchange-rate persistence
+- Decimal-safe money primitive
 - Base audit/idempotency infrastructure
+- Database readiness endpoint
+- Transaction abstraction will be introduced with the first state-changing application use case
 
 ## Phase 2 — Identity & Access
 - Authentication provider boundary
