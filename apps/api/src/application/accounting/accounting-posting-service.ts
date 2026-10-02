@@ -41,8 +41,8 @@ export async function postInvoiceIssued(db:Database,invoiceId:string,context:{ac
   const accounts=await accountIds(db,codes);
   const rate=await resolveRateToBase(db,invoice.currency_code,"USD");
   const lines=[{accountId:accounts.get("1100")!,debitAmount:invoice.total_amount,description:"Accounts receivable",customerId:invoice.customer_id}];
-  for(const [code,value] of revenue)lines.push({accountId:accounts.get(code)!,creditAmount:value.toFixed(),description:"Revenue",customerId:null});
-  if(cogs.gt(0)){lines.push({accountId:accounts.get("5000")!,debitAmount:cogs.toFixed(),description:"Cost of goods sold",customerId:null});lines.push({accountId:accounts.get("1200")!,creditAmount:cogs.toFixed(),description:"Inventory reduction",customerId:null});}
+  for(const [code,value] of revenue)lines.push({accountId:accounts.get(code)!,creditAmount:value.toFixed(),description:"Revenue",customerId:invoice.customer_id});
+  if(cogs.gt(0)){lines.push({accountId:accounts.get("5000")!,debitAmount:cogs.toFixed(),description:"Cost of goods sold",customerId:invoice.customer_id});lines.push({accountId:accounts.get("1200")!,creditAmount:cogs.toFixed(),description:"Inventory reduction",customerId:invoice.customer_id});}
   const created=await createJournal(db,{entryDate:invoice.issue_date,currencyCode:invoice.currency_code,exchangeRateToBase:rate,description:"Invoice "+invoiceId,sourceType:"invoice",sourceId:invoiceId,sourceEventKey:"invoice:"+invoiceId+":issued",lines},context);
   const posted=await postJournal(db,created.entry.id,context);
   await db.update(invoices).set({journalEntryId:posted.entry.id}).where(eq(invoices.id,invoiceId));
