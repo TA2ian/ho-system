@@ -1,5 +1,0 @@
-connectorId: "default"
-generate:
-  javascriptSdk:
-    outputDir: "../../src/generated/dataconnect"
-    package: "@ho-network/dataconnect"
