@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { Decimal } from "decimal.js";
 import { z } from "zod";
 import type { Database } from "../../db/client.js";
@@ -133,10 +133,7 @@ export async function closeCollection(
   input: z.infer<typeof closeCollectionInputSchema>,
   context: { actorId: string }
 ) {
-  const rows = await db.execute(
-    'SELECT id, driver_user_id, status FROM driver_collection_sessions WHERE id = $1::uuid FOR UPDATE',
-    [sessionId]
-  );
+  const rows = await db.execute(sql`SELECT id, driver_user_id, status FROM driver_collection_sessions WHERE id = ${sessionId}::uuid FOR UPDATE`);
   const session = rows.rows[0] as { id: string; driver_user_id: string; status: string } | undefined;
   if (!session) throw new ApplicationError("COLLECTION_NOT_FOUND", 404, "جلسة التحصيل غير موجودة");
   if (session.driver_user_id !== context.actorId) {
@@ -153,10 +150,7 @@ export async function closeCollection(
     duplicateKeys.add(key);
   }
 
-  const expectedRows = await db.execute(
-    "SELECT currency_code, method, COALESCE(SUM(amount), 0)::text AS expected_amount FROM payments p JOIN driver_collection_payments dcp ON dcp.payment_id = p.id WHERE dcp.session_id = $1::uuid AND p.status = 'recorded' GROUP BY currency_code, method ORDER BY currency_code, method",
-    [sessionId]
-  );
+  const expectedRows = await db.execute(sql`SELECT currency_code, method, COALESCE(SUM(amount), 0)::text AS expected_amount FROM payments p JOIN driver_collection_payments dcp ON dcp.payment_id = p.id WHERE dcp.session_id = ${sessionId}::uuid AND p.status = 'recorded' GROUP BY currency_code, method ORDER BY currency_code, method`);
 
   const expected = new Map<string, string>();
   for (const row of expectedRows.rows as Array<{ currency_code: string; method: string; expected_amount: string }>) {
