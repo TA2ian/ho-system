@@ -18,7 +18,7 @@ import { createInvoiceFromSalesOrder, createInvoiceInputSchema, getInvoice, issu
 import { allocatePayment, allocatePaymentInputSchema, createPayment, createPaymentInputSchema, getPayment, reversePayment, reversePaymentInputSchema } from "./application/payments/payment-service.js";
 import { addCollectionPayment, addCollectionPaymentInputSchema, closeCollection, closeCollectionInputSchema, getCollection, openCollection, openCollectionInputSchema } from "./application/driver-collections/collection-service.js";
 import { getInvoiceReceivable, listCustomerReceivables } from "./application/receivables/receivable-service.js";
-import { assignDeliveryOrder, assignDeliveryOrderInputSchema, createDeliveryOrder, createDeliveryOrderInputSchema, getDeliveryOrder, listDeliveryOrders, transitionDeliveryOrder, transitionDeliveryOrderInputSchema } from "./application/delivery/delivery-service.js";
+import { assignDeliveryOrder, assignDeliveryOrderInputSchema, createDeliveryOrder, createDeliveryOrderInputSchema, getDeliveryOrder, listDeliveryOrders, recordDeliveryCollection, deliveryCollectionInputSchema, transitionDeliveryOrder, transitionDeliveryOrderInputSchema } from "./application/delivery/delivery-service.js";
 import { campaignStatusInputSchema, createCampaign, createCampaignInputSchema, getCampaign, linkCampaignInvoice, linkCampaignInvoiceInputSchema, listCampaigns, recordCampaignSpend, recordCampaignSpendInputSchema, transitionCampaign } from "./application/campaigns/campaign-service.js";
 import { completeEmployeeTask, createCompensationRule, createCompensationRuleInputSchema, createEmployeeTask, createEmployeeTaskInputSchema, listCompensationRules, listEmployeeTasks } from "./application/employees/employee-service.js";
 import { createExpense, createExpenseInputSchema, listExpenses, voidExpense, voidExpenseInputSchema } from "./application/expenses/expense-service.js";
@@ -899,6 +899,47 @@ export function buildApp(dependencies: {
     return reply.status(result.status).send(result.body);
   });
 
+
+  app.post<{ Params: { id: string } }>("/api/v1/delivery-orders/:id/collect", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "collections.manage");
+    if (!/^[0-9a-fA-F-]{36}$/.test(request.params.id)) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "معرّف طلب التوصيل غير صالح" });
+
+    const collectionInputSchema = deliveryCollectionInputSchema.extend({ sessionId: z.string().uuid() });
+    const parsed = collectionInputSchema.safeParse({ ...(request.body as Record<string, unknown>), deliveryOrderId: request.params.id });
+    if (!parsed.success) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "بيانات تحصيل التوصيل غير صالحة", issues: parsed.error.flatten() });
+
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (typeof idempotencyKey !== "string" || idempotencyKey.trim().length < 16 || idempotencyKey.length > 255) {
+      return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
+    }
+    const key = idempotencyKey.trim();
+    const scope = `delivery:collect:${request.params.id}:${request.principal.userId}`;
+    const requestHash = hashRequestBody(parsed.data);
+
+    const result = await withTransaction(dependencies.pool, async (tx) => {
+      const idem = await beginIdempotency(tx, scope, key, requestHash);
+      if (idem.kind === "replay") return idem;
+      if (idem.kind === "conflict") throw new ApplicationError(
+        idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS",
+        409,
+        idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة"
+      );
+
+      const collected = await recordDeliveryCollection(
+        tx,
+        request.params.id,
+        parsed.data.sessionId,
+        parsed.data,
+        { actorId: request.principal!.userId, requestId: request.id, idempotencyKey: key }
+      );
+      const body = { data: collected };
+      await completeIdempotency(tx, idem.id, 201, body);
+      return { kind: "new" as const, status: 201, body };
+    });
+
+    return reply.status(result.status).send(result.body);
+  });
 
   app.post("/api/v1/driver-collections", async (request, reply) => {
     if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
