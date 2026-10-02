@@ -14,6 +14,8 @@ Supported methods in this slice are `cash` and `sham_cash`. The currency is expl
 
 Allocation is transaction-safe. The payment row and target invoice row are locked before remaining balances are calculated. A payment cannot be allocated beyond its remaining unallocated amount, and an invoice cannot be allocated beyond its outstanding amount. Payment and invoice currencies must match in this version; cross-currency settlement will require an explicit exchange-rate snapshot and is intentionally not inferred.
 
+A recorded payment is never deleted. Authorized users may reverse it through `POST /api/v1/payments/:id/reverse`; existing allocations are reversed through immutable reversal rows, and the payment is marked `voided`. The historical allocation records remain available for audit.
+
 There is no editable outstanding-balance field. Invoice outstanding is derived from the issued invoice total minus posted payment allocations. Voiding payments and reversing allocations are separate controlled transitions and are not implemented by editing historical rows.
 
 Driver collection and settlement will build on the same payment records rather than creating a second financial representation.
