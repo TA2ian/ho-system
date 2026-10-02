@@ -16,6 +16,7 @@ import { createCatalogItem, createCatalogItemInputSchema, listCatalogCategories,
 import { createSalesOrder, createSalesOrderInputSchema, getSalesOrder, transitionSalesOrder } from "./application/sales-orders/sales-order-service.js";
 import { createInvoiceFromSalesOrder, createInvoiceInputSchema, getInvoice, issueInvoice } from "./application/invoices/invoice-service.js";
 import { allocatePayment, allocatePaymentInputSchema, createPayment, createPaymentInputSchema, getPayment, reversePayment, reversePaymentInputSchema } from "./application/payments/payment-service.js";
+import { addCollectionPayment, addCollectionPaymentInputSchema, closeCollection, closeCollectionInputSchema, getCollection, openCollection, openCollectionInputSchema } from "./application/driver-collections/collection-service.js";
 
 export function buildApp(dependencies: {
   db: Database;
@@ -526,6 +527,88 @@ export function buildApp(dependencies: {
         actorId: request.principal!.userId, requestId: request.id, idempotencyKey: key
       });
       const body = { data: reversed };
+      await completeIdempotency(tx, idem.id, 200, body);
+      return { kind: "new" as const, status: 200, body };
+    });
+    return reply.status(result.status).send(result.body);
+  });
+
+
+  app.post("/api/v1/driver-collections", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "collections.manage");
+    const parsed = openCollectionInputSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "بيانات جلسة التحصيل غير صالحة", issues: parsed.error.flatten() });
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (typeof idempotencyKey !== "string" || idempotencyKey.trim().length < 16 || idempotencyKey.length > 255) {
+      return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
+    }
+    const key = idempotencyKey.trim();
+    const scope = `driver-collection:open:${request.principal.userId}`;
+    const requestHash = hashRequestBody(parsed.data);
+    const result = await withTransaction(dependencies.pool, async (tx) => {
+      const idem = await beginIdempotency(tx, scope, key, requestHash);
+      if (idem.kind === "replay") return idem;
+      if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
+      const created = await openCollection(tx, parsed.data, { actorId: request.principal!.userId });
+      const body = { data: created };
+      await completeIdempotency(tx, idem.id, 201, body);
+      return { kind: "new" as const, status: 201, body };
+    });
+    return reply.status(result.status).send(result.body);
+  });
+
+  app.get<{ Params: { id: string } }>("/api/v1/driver-collections/:id", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "collections.read");
+    if (!/^[0-9a-fA-F-]{36}$/.test(request.params.id)) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "معرّف جلسة التحصيل غير صالح" });
+    return reply.send({ data: await getCollection(dependencies.db, request.params.id, request.principal.userId) });
+  });
+
+  app.post<{ Params: { id: string } }>("/api/v1/driver-collections/:id/payments", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "collections.manage");
+    if (!/^[0-9a-fA-F-]{36}$/.test(request.params.id)) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "معرّف جلسة التحصيل غير صالح" });
+    const parsed = addCollectionPaymentInputSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "بيانات الدفعة غير صالحة", issues: parsed.error.flatten() });
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (typeof idempotencyKey !== "string" || idempotencyKey.trim().length < 16 || idempotencyKey.length > 255) {
+      return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
+    }
+    const key = idempotencyKey.trim();
+    const scope = `driver-collection:payment:${request.params.id}:${request.principal.userId}`;
+    const requestHash = hashRequestBody(parsed.data);
+    const result = await withTransaction(dependencies.pool, async (tx) => {
+      const idem = await beginIdempotency(tx, scope, key, requestHash);
+      if (idem.kind === "replay") return idem;
+      if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
+      const created = await addCollectionPayment(tx, request.params.id, parsed.data, { actorId: request.principal!.userId, requestId: request.id, idempotencyKey: key });
+      const body = { data: created };
+      await completeIdempotency(tx, idem.id, 201, body);
+      return { kind: "new" as const, status: 201, body };
+    });
+    return reply.status(result.status).send(result.body);
+  });
+
+  app.post<{ Params: { id: string } }>("/api/v1/driver-collections/:id/close", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "collections.manage");
+    if (!/^[0-9a-fA-F-]{36}$/.test(request.params.id)) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "معرّف جلسة التحصيل غير صالح" });
+    const parsed = closeCollectionInputSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "بيانات إغلاق جلسة التحصيل غير صالحة", issues: parsed.error.flatten() });
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (typeof idempotencyKey !== "string" || idempotencyKey.trim().length < 16 || idempotencyKey.length > 255) {
+      return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
+    }
+    const key = idempotencyKey.trim();
+    const scope = `driver-collection:close:${request.params.id}:${request.principal.userId}`;
+    const requestHash = hashRequestBody(parsed.data);
+    const result = await withTransaction(dependencies.pool, async (tx) => {
+      const idem = await beginIdempotency(tx, scope, key, requestHash);
+      if (idem.kind === "replay") return idem;
+      if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
+      const closed = await closeCollection(tx, request.params.id, parsed.data, { actorId: request.principal!.userId });
+      const body = { data: closed };
       await completeIdempotency(tx, idem.id, 200, body);
       return { kind: "new" as const, status: 200, body };
     });
