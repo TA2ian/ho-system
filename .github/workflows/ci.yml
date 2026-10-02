@@ -18,3 +18,30 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: ho_network
+          POSTGRES_USER: ho
+          POSTGRES_PASSWORD: test-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ho -d ho_network"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run db:verify
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://ho:test-password@localhost:5432/ho_network
