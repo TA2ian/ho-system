@@ -14,7 +14,7 @@ import { authenticateRequest } from "./identity/middleware.js";
 import { ApplicationError } from "./domain/errors.js";
 import { createCatalogItem, createCatalogItemInputSchema, listCatalogCategories, listCatalogItems } from "./application/catalog/catalog-service.js";
 import { createSalesOrder, createSalesOrderInputSchema, getSalesOrder, transitionSalesOrder } from "./application/sales-orders/sales-order-service.js";
-import { createInvoiceFromSalesOrder, createInvoiceInputSchema, getInvoice, issueInvoice } from "./application/invoices/invoice-service.js";
+import { createInvoiceFromSalesOrder, createInvoiceInputSchema, getInvoice, issueInvoice, voidInvoice, voidInvoiceInputSchema } from "./application/invoices/invoice-service.js";
 import { allocatePayment, allocatePaymentInputSchema, createPayment, createPaymentInputSchema, getPayment, reversePayment, reversePaymentInputSchema } from "./application/payments/payment-service.js";
 import { addCollectionPayment, addCollectionPaymentInputSchema, closeCollection, closeCollectionInputSchema, getCollection, openCollection, openCollectionInputSchema } from "./application/driver-collections/collection-service.js";
 import { getInvoiceReceivable, listCustomerReceivables } from "./application/receivables/receivable-service.js";
@@ -421,6 +421,27 @@ export function buildApp(dependencies: {
         actorId: request.principal!.userId, requestId: request.id, idempotencyKey: key
       });
       const body = { data: issued };
+      await completeIdempotency(tx, idem.id, 200, body);
+      return { kind: "new" as const, status: 200, body };
+    });
+    return reply.status(result.status).send(result.body);
+  });
+
+  app.post<{ Params: { id: string } }>("/api/v1/invoices/:id/void", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "invoices.manage");
+    if (!/^[0-9a-fA-F-]{36}$/.test(request.params.id)) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "معرّف الفاتورة غير صالح" });
+    const parsed = voidInvoiceInputSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "سبب إلغاء الفاتورة غير صالح", issues: parsed.error.flatten() });
+    const key = request.headers["idempotency-key"];
+    if (typeof key !== "string" || key.trim().length < 16 || key.length > 255) return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
+    const idemKey = key.trim(), scope = `invoice:void:${request.params.id}:${request.principal.userId}`, hash = hashRequestBody(parsed.data);
+    const result = await withTransaction(dependencies.pool, async tx => {
+      const idem = await beginIdempotency(tx, scope, idemKey, hash);
+      if (idem.kind === "replay") return idem;
+      if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
+      const updated = await voidInvoice(tx, request.params.id, parsed.data, { actorId: request.principal!.userId, requestId: request.id, idempotencyKey: idemKey });
+      const body = { data: updated };
       await completeIdempotency(tx, idem.id, 200, body);
       return { kind: "new" as const, status: 200, body };
     });

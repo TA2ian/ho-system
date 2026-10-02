@@ -72,3 +72,29 @@ export async function getInvoice(db: Database, invoiceId: string): Promise<{ inv
   const lines = await db.select().from(invoiceLines).where(eq(invoiceLines.invoiceId, invoiceId)).orderBy(invoiceLines.lineNumber);
   return { invoice: toInvoice(invoice), lines: lines.map(toLine) };
 }
+
+
+export const voidInvoiceInputSchema = z.object({ reason: z.string().trim().min(3).max(500) });
+
+export async function voidInvoice(db: Database, invoiceId: string, input: z.infer<typeof voidInvoiceInputSchema>, context: { actorId: string; requestId: string; idempotencyKey: string }): Promise<{ invoice: Invoice; lines: InvoiceLine[] }> {
+  const rows = await db.execute(sql`SELECT id, status FROM invoices WHERE id = ${invoiceId}::uuid FOR UPDATE`);
+  const locked = rows.rows[0] as { id: string; status: string } | undefined;
+  if (!locked) throw new ApplicationError("INVOICE_NOT_FOUND", 404, "الفاتورة غير موجودة");
+  if (!["draft", "issued"].includes(locked.status)) throw new ApplicationError("INVOICE_INVALID_STATE", 409, "لا يمكن إلغاء الفاتورة من حالتها الحالية");
+  const allocationRows = await db.execute(sql`
+    SELECT (
+      COALESCE((SELECT SUM(pa.amount) FROM payment_allocations pa WHERE pa.invoice_id = ${invoiceId}::uuid), 0)
+      - COALESCE((SELECT SUM(par.amount) FROM payment_allocation_reversals par JOIN payment_allocations pa ON pa.id = par.payment_allocation_id WHERE pa.invoice_id = ${invoiceId}::uuid), 0)
+    )::text AS net_allocated
+  `);
+  const netAllocated = new Decimal(String((allocationRows.rows[0] as { net_allocated?: string }).net_allocated ?? "0"));
+  if (netAllocated.gt(0)) throw new ApplicationError("INVOICE_HAS_ALLOCATED_PAYMENTS", 409, "لا يمكن إلغاء فاتورة عليها تخصيص مالي صافٍ؛ يجب عكس التخصيص أولاً");
+  const activeDeliveryRows = await db.execute(sql`SELECT id FROM delivery_orders WHERE invoice_id = ${invoiceId}::uuid AND status NOT IN ('delivered', 'failed', 'returned', 'cancelled') LIMIT 1`);
+  if (activeDeliveryRows.rows[0]) throw new ApplicationError("INVOICE_HAS_ACTIVE_DELIVERY", 409, "لا يمكن إلغاء فاتورة مرتبطة بتوصيل نشط");
+  const now = new Date();
+  const [updated] = await db.update(invoices).set({ status: "voided", voidedAt: now, updatedAt: now }).where(eq(invoices.id, invoiceId)).returning();
+  if (!updated) throw new ApplicationError("INVOICE_UPDATE_FAILED", 500, "تعذر إلغاء الفاتورة");
+  await recordAuditEvent(db, { actorId: context.actorId, action: "invoice.voided", resourceType: "invoice", resourceId: invoiceId, requestId: context.requestId, idempotencyKey: context.idempotencyKey, metadata: { reason: input.reason } });
+  const lines = await db.select().from(invoiceLines).where(eq(invoiceLines.invoiceId, invoiceId)).orderBy(invoiceLines.lineNumber);
+  return { invoice: toInvoice(updated), lines: lines.map(toLine) };
+}
