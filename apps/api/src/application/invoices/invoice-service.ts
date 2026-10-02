@@ -9,7 +9,7 @@ import { salesOrderLines, salesOrders } from "../../db/sales-schema.js";
 import { ApplicationError } from "../../domain/errors.js";
 import type { Invoice, InvoiceLine, InvoiceStatus } from "../../domain/invoice.js";
 import { recordAuditEvent } from "../audit.js";
-import { postInvoiceIssued } from "../accounting/accounting-posting-service.js";
+import { postInvoiceIssued, postInvoiceVoided } from "../accounting/accounting-posting-service.js";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const createInvoiceInputSchema = z.object({
@@ -100,6 +100,13 @@ export async function voidInvoice(db: Database, invoiceId: string, input: z.infe
   const now = new Date();
   const [updated] = await db.update(invoices).set({ status: "voided", voidedAt: now, updatedAt: now }).where(eq(invoices.id, invoiceId)).returning();
   if (!updated) throw new ApplicationError("INVOICE_UPDATE_FAILED", 500, "تعذر إلغاء الفاتورة");
+  if (locked.status === "issued") {
+    try {
+      await postInvoiceVoided(db, invoiceId, context);
+    } catch (error) {
+      throw new ApplicationError("INVOICE_REVERSAL_FAILED", 409, error instanceof Error ? error.message : "تعذر عكس القيد المحاسبي للفاتورة");
+    }
+  }
   await recordAuditEvent(db, { actorId: context.actorId, action: "invoice.voided", resourceType: "invoice", resourceId: invoiceId, requestId: context.requestId, idempotencyKey: context.idempotencyKey, metadata: { reason: input.reason } });
   const lines = await db.select().from(invoiceLines).where(eq(invoiceLines.invoiceId, invoiceId)).orderBy(invoiceLines.lineNumber);
   return { invoice: toInvoice(updated), lines: lines.map(toLine) };
