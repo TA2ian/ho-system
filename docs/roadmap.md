@@ -27,29 +27,36 @@
 - Resource scopes
 - Session/token verification
 
-## Phase 3 — Business domains
-- Customers
+## Phase 3 — First vertical slice
+- Customers domain and persistence
+- Customer API contract
+- Server-side validation
+- API integration boundary for the frontend
+
+## Phase 4 — Business domains
 - Catalog
 - Sales orders
 - Invoices
 - Receivables
 - Payments
+- Campaigns and advertising partner scopes
+- Delivery and driver workflows
 
-## Phase 4 — Accounting integrity
+## Phase 5 — Accounting integrity
 - Financial posting rules
 - Reversal rules
 - Period controls
 - Reconciliation
 - Reporting read models
 
-## Phase 5 — Arabic PWA
+## Phase 6 — Arabic PWA
 - Preserve Arabic-first UX direction
 - RTL
 - Responsive layouts
 - Offline-safe shell
 - API integration
 
-## Phase 6 — Verification
+## Phase 7 — Verification
 - Unit tests
 - Integration tests
 - Database tests
@@ -58,7 +65,7 @@
 - Idempotency tests
 - Backup/restore verification
 
-## Phase 7 — Production
+## Phase 8 — Production
 - Container images
 - VPS
 - PostgreSQL
