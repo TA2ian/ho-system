@@ -73,3 +73,78 @@ export const exchangeRates = pgTable("exchange_rates", {
     table.observedAt
   )
 ]);
+
+
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey(),
+  email: text("email"),
+  displayName: text("display_name").notNull(),
+  status: text("status").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => [
+  uniqueIndex("users_email_uq").on(table.email),
+  index("users_status_idx").on(table.status)
+]);
+
+export const authIdentities = pgTable("auth_identities", {
+  id: uuid("id").primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  provider: text("provider").notNull(),
+  subject: text("subject").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => [
+  uniqueIndex("auth_identities_provider_subject_uq").on(table.provider, table.subject),
+  index("auth_identities_user_idx").on(table.userId)
+]);
+
+export const roles = pgTable("roles", {
+  id: uuid("id").primaryKey(),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  isSystem: boolean("is_system").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => [
+  uniqueIndex("roles_code_uq").on(table.code)
+]);
+
+export const permissions = pgTable("permissions", {
+  id: uuid("id").primaryKey(),
+  code: text("code").notNull(),
+  description: text("description").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => [
+  uniqueIndex("permissions_code_uq").on(table.code)
+]);
+
+export const userRoles = pgTable("user_roles", {
+  userId: uuid("user_id").notNull().references(() => users.id),
+  roleId: uuid("role_id").notNull().references(() => roles.id),
+  assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull().defaultNow(),
+  assignedBy: uuid("assigned_by").references(() => users.id)
+}, (table) => [
+  uniqueIndex("user_roles_uq").on(table.userId, table.roleId),
+  index("user_roles_role_idx").on(table.roleId)
+]);
+
+export const rolePermissions = pgTable("role_permissions", {
+  roleId: uuid("role_id").notNull().references(() => roles.id),
+  permissionId: uuid("permission_id").notNull().references(() => permissions.id),
+  assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => [
+  uniqueIndex("role_permissions_uq").on(table.roleId, table.permissionId),
+  index("role_permissions_permission_idx").on(table.permissionId)
+]);
+
+export const userAccessScopes = pgTable("user_access_scopes", {
+  userId: uuid("user_id").notNull().references(() => users.id),
+  scopeType: text("scope_type").notNull(),
+  scopeId: uuid("scope_id").notNull(),
+  grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
+  grantedBy: uuid("granted_by").references(() => users.id)
+}, (table) => [
+  uniqueIndex("user_access_scopes_uq").on(table.userId, table.scopeType, table.scopeId),
+  index("user_access_scopes_scope_idx").on(table.scopeType, table.scopeId)
+]);
