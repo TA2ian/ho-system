@@ -16,7 +16,8 @@ export const setExchangeRateInputSchema=z.object({
 }).refine(v=>v.baseCurrencyCode!==v.quoteCurrencyCode,"لا يمكن أن تكون العملتان متطابقتين");
 
 export async function setExchangeRate(db:Database,input:z.infer<typeof setExchangeRateInputSchema>,context:{actorId:string;requestId:string;idempotencyKey:string}){
-  const [row]=await db.execute(sql`INSERT INTO exchange_rates (id,base_currency_code,quote_currency_code,rate,source,observed_at) VALUES (${randomUUID()}::uuid,${input.baseCurrencyCode},${input.quoteCurrencyCode},${input.rate},${input.source.trim()},${input.observedAt?new Date(input.observedAt):new Date()}) RETURNING *`);
+  const result=await db.execute(sql`INSERT INTO exchange_rates (id,base_currency_code,quote_currency_code,rate,source,observed_at) VALUES (${randomUUID()}::uuid,${input.baseCurrencyCode},${input.quoteCurrencyCode},${input.rate},${input.source.trim()},${input.observedAt?new Date(input.observedAt):new Date()}) RETURNING *`);
+  const row=result.rows[0] as Record<string, unknown> | undefined;
   if(!row)throw new ApplicationError("EXCHANGE_RATE_CREATE_FAILED",500,"تعذر تسجيل سعر الصرف");
   await recordAuditEvent(db,{actorId:context.actorId,action:"exchange_rate.recorded",resourceType:"exchange_rate",resourceId:String((row as {id:string}).id),requestId:context.requestId,idempotencyKey:context.idempotencyKey,metadata:{baseCurrencyCode:input.baseCurrencyCode,quoteCurrencyCode:input.quoteCurrencyCode,rate:input.rate,source:input.source}});
   return row;
