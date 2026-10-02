@@ -2,8 +2,10 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import { config } from "./config.js";
+import { checkDatabaseHealth } from "./db/health.js";
+import type { Database } from "./db/client.js";
 
-export function buildApp() {
+export function buildApp(dependencies: { db: Database }) {
   const app = Fastify({
     logger: {
       level: config.NODE_ENV === "production" ? "info" : "debug"
@@ -22,8 +24,23 @@ export function buildApp() {
   }));
 
   app.get("/ready", async (_request, reply) => {
-    // Database readiness will be wired in Phase 1.
-    return reply.send({ status: "ready" });
+    const databaseReady = await checkDatabaseHealth(dependencies.db);
+
+    if (!databaseReady) {
+      return reply.status(503).send({
+        status: "not_ready",
+        dependencies: {
+          database: "unavailable"
+        }
+      });
+    }
+
+    return reply.send({
+      status: "ready",
+      dependencies: {
+        database: "ok"
+      }
+    });
   });
 
   app.setErrorHandler((error, _request, reply) => {
