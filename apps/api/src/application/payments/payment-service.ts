@@ -10,6 +10,7 @@ import { paymentAllocationReversals } from "../../db/payment-reversal-schema.js"
 import { ApplicationError } from "../../domain/errors.js";
 import type { Payment, PaymentAllocation, PaymentMethod, PaymentStatus } from "../../domain/payment.js";
 import { recordAuditEvent } from "../audit.js";
+import { postPaymentAllocated, postPaymentRecorded, reversePaymentAllocation, reversePaymentRecorded } from "../accounting/accounting-posting-service.js";
 
 const dateTimeSchema = z.string().datetime({ offset: true });
 
@@ -200,6 +201,7 @@ export async function reversePayment(
         reversedAt: new Date(),
         reversedBy: context.actorId
       });
+      await reversePaymentAllocation(db, allocation.id, context);
     }
   }
 
