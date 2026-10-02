@@ -2,15 +2,18 @@ import { randomUUID } from "node:crypto";
 import type { Database } from "../../db/client.js";
 import { customers } from "../../db/customer-schema.js";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 import type { Customer } from "../../domain/customer.js";
 
-export interface CreateCustomerInput {
-  type: Customer["type"];
-  displayName: string;
-  phone?: string | null;
-  email?: string | null;
-  notes?: string | null;
-}
+export const createCustomerInputSchema = z.object({
+  type: z.enum(["individual", "business"]),
+  displayName: z.string().trim().min(2).max(200),
+  phone: z.string().trim().max(50).nullable().optional(),
+  email: z.string().trim().email().max(320).nullable().optional(),
+  notes: z.string().trim().max(2000).nullable().optional()
+});
+
+export type CreateCustomerInput = z.infer<typeof createCustomerInputSchema>;
 
 export async function createCustomer(
   db: Database,
