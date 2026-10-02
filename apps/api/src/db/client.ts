@@ -3,8 +3,9 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { config } from "../config.js";
 import * as schema from "./schema.js";
 import { customers } from "./customer-schema.js";
+import * as catalogSchema from "./catalog-schema.js";
 
-export const allSchema = { ...schema, customers };
+export const allSchema = { ...schema, customers, ...catalogSchema };
 
 export type Database = NodePgDatabase<typeof allSchema>;
 
