@@ -25,6 +25,7 @@ services:
       DATABASE_URL: postgresql://ho:${POSTGRES_PASSWORD:-change-me}@postgres:5432/ho_network
     ports:
       - "3000:3000"
+    command: ["sh", "-c", "npm run db:migrate:prod && npm start"]
     depends_on:
       postgres:
         condition: service_healthy
