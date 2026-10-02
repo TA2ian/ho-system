@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "../../db/client.js";
 import { catalogItems } from "../../db/catalog-schema.js";
@@ -136,7 +136,7 @@ export async function transitionSalesOrder(
   context: { actorId: string; requestId: string; idempotencyKey: string }
 ): Promise<{ order: SalesOrder; lines: SalesOrderLine[] }> {
   const rows = await db.execute(
-    `SELECT id, status FROM sales_orders WHERE id = '${orderId}'::uuid FOR UPDATE`
+    sql`SELECT id, status FROM sales_orders WHERE id = ${orderId}::uuid FOR UPDATE`
   );
   const locked = rows.rows[0] as { id?: string; status?: string } | undefined;
   if (!locked) throw new ApplicationError("SALES_ORDER_NOT_FOUND", 404, "طلب البيع غير موجود");
