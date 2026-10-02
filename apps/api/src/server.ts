@@ -1,9 +1,14 @@
 import { buildApp } from "./app.js";
-import { closeDatabase, createDatabase } from "./db/client.js";
 import { config } from "./config.js";
+import { closeDatabase, createDatabase } from "./db/client.js";
+import { unconfiguredAuthenticationAdapter } from "./identity/unconfigured-adapter.js";
 
 const { db, pool } = createDatabase();
-const app = buildApp({ db });
+const app = buildApp({
+  db,
+  pool,
+  authAdapter: unconfiguredAuthenticationAdapter
+});
 
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, "shutting down");
@@ -16,10 +21,7 @@ process.once("SIGINT", () => void shutdown("SIGINT"));
 process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
 try {
-  await app.listen({
-    host: config.HOST,
-    port: config.PORT
-  });
+  await app.listen({ host: config.HOST, port: config.PORT });
 } catch (error) {
   app.log.error(error);
   await closeDatabase(pool);
