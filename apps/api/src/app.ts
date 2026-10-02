@@ -17,6 +17,7 @@ import { createSalesOrder, createSalesOrderInputSchema, getSalesOrder, transitio
 import { createInvoiceFromSalesOrder, createInvoiceInputSchema, getInvoice, issueInvoice } from "./application/invoices/invoice-service.js";
 import { allocatePayment, allocatePaymentInputSchema, createPayment, createPaymentInputSchema, getPayment, reversePayment, reversePaymentInputSchema } from "./application/payments/payment-service.js";
 import { addCollectionPayment, addCollectionPaymentInputSchema, closeCollection, closeCollectionInputSchema, getCollection, openCollection, openCollectionInputSchema } from "./application/driver-collections/collection-service.js";
+import { getInvoiceReceivable, listCustomerReceivables } from "./application/receivables/receivable-service.js";
 
 export function buildApp(dependencies: {
   db: Database;
@@ -420,6 +421,24 @@ export function buildApp(dependencies: {
       return { kind: "new" as const, status: 200, body };
     });
     return reply.status(result.status).send(result.body);
+  });
+
+  app.get<{ Params: { id: string } }>("/api/v1/receivables/invoices/:id", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "receivables.read");
+    if (!/^[0-9a-fA-F-]{36}$/.test(request.params.id)) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", message: "معرّف الفاتورة غير صالح" });
+    }
+    return reply.send({ data: await getInvoiceReceivable(dependencies.db, request.params.id) });
+  });
+
+  app.get<{ Params: { customerId: string } }>("/api/v1/receivables/customers/:customerId", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "receivables.read");
+    if (!/^[0-9a-fA-F-]{36}$/.test(request.params.customerId)) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", message: "معرّف العميل غير صالح" });
+    }
+    return reply.send({ data: await listCustomerReceivables(dependencies.db, request.params.customerId) });
   });
 
   app.get<{ Params: { id: string } }>("/api/v1/payments/:id", async (request, reply) => {
