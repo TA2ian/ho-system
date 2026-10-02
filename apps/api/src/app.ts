@@ -137,17 +137,21 @@ export function buildApp(dependencies: {
       });
     }
 
-    if (error.message === "FORBIDDEN") {
+    if (error instanceof Error && error.message === "FORBIDDEN") {
       return reply.status(403).send({
         error: "FORBIDDEN",
         message: "ليس لديك الصلاحية لتنفيذ هذا الإجراء"
       });
     }
 
-    if (error.statusCode && error.statusCode < 500) {
-      return reply.status(error.statusCode).send({
+    const statusCode = typeof error === "object" && error !== null && "statusCode" in error
+      ? (error as { statusCode?: unknown }).statusCode
+      : undefined;
+
+    if (typeof statusCode === "number" && statusCode < 500) {
+      return reply.status(statusCode).send({
         error: "REQUEST_ERROR",
-        message: error.message
+        message: error instanceof Error ? error.message : "طلب غير صالح"
       });
     }
 
