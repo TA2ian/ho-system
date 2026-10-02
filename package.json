@@ -10,7 +10,8 @@
     "typecheck": "tsc -p apps/api/tsconfig.json --noEmit",
     "test": "tsx --test apps/api/src/domain/*.test.ts",
     "db:migrate": "tsx apps/api/src/db/migrate.ts",
-    "db:migrate:prod": "node apps/api/dist/db/migrate.js"
+    "db:migrate:prod": "node apps/api/dist/db/migrate.js",
+    "db:verify": "tsx apps/api/src/db/migrate.integration.ts"
   },
   "engines": {
     "node": ">=22"
