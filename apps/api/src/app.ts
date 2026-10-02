@@ -4,6 +4,7 @@ import helmet from "@fastify/helmet";
 import { config } from "./config.js";
 import { checkDatabaseHealth } from "./db/health.js";
 import type { Database } from "./db/client.js";
+import { createCustomer, createCustomerInputSchema, listCustomers } from "./application/customers/customer-service.js";
 
 export function buildApp(dependencies: { db: Database }) {
   const app = Fastify({
@@ -22,6 +23,27 @@ export function buildApp(dependencies: { db: Database }) {
     status: "ok",
     service: "ho-network-api"
   }));
+
+
+  app.get("/api/v1/customers", async (_request, reply) => {
+    const customers = await listCustomers(dependencies.db);
+    return reply.send({ data: customers });
+  });
+
+  app.post("/api/v1/customers", async (request, reply) => {
+    const parsed = createCustomerInputSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: "VALIDATION_ERROR",
+        message: "بيانات العميل غير صالحة",
+        issues: parsed.error.flatten()
+      });
+    }
+
+    const customer = await createCustomer(dependencies.db, parsed.data);
+    return reply.status(201).send({ data: customer });
+  });
 
   app.get("/ready", async (_request, reply) => {
     const databaseReady = await checkDatabaseHealth(dependencies.db);
