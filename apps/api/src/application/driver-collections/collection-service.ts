@@ -155,7 +155,7 @@ export async function closeCollection(
   const expectedRows = await db.execute(sql<{ currency_code: string; method: string; expected_amount: string }>`SELECT currency_code, method, COALESCE(SUM(amount), 0)::text AS expected_amount FROM payments p JOIN driver_collection_payments dcp ON dcp.payment_id = p.id WHERE dcp.session_id = ${sessionId}::uuid AND p.status = 'recorded' GROUP BY currency_code, method ORDER BY currency_code, method`);
 
   const expected = new Map<string, string>();
-  for (const row of expectedRows.rows) {
+  for (const row of expectedRows.rows as Array<{ currency_code: string; method: string; expected_amount: string }>) {
     expected.set(row.currency_code + ":" + row.method, row.expected_amount);
   }
 
