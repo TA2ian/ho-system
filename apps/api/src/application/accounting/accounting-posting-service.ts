@@ -6,7 +6,7 @@ import { paymentAllocations, payments } from "../../db/payment-schema.js";
 import { createJournal, postJournal, reverseJournal } from "./accounting-service.js";
 import { resolveRateToBase } from "../exchange/exchange-service.js";
 
-type PostingLine = { accountId: string; debitAmount?: string; creditAmount?: string; description: string; customerId: string };
+type PostingLine = { accountId: string; debitAmount?: string; creditAmount?: string; description: string; customerId?: string | null };
 
 async function accountIds(db:Database,codes:string[]){
   const result=await db.execute(sql`SELECT code,id FROM chart_of_accounts WHERE code = ANY(${codes}::text[])`);
@@ -165,7 +165,7 @@ export async function postExpenseRecorded(
     sourceEventKey: "expense:" + expenseId + ":recorded",
     lines: [
       { accountId: accounts.get("5300")!, debitAmount: expense.amount, description: "Operating expense", customerId: null },
-      { accountId: accounts.get(creditCode)!, creditAmount: expense.amount, description: expense.payment_method === "unpaid" ? "Accounts payable" : "Cash payment", customerId: "" }
+      { accountId: accounts.get(creditCode)!, creditAmount: expense.amount, description: expense.payment_method === "unpaid" ? "Accounts payable" : "Cash payment", customerId: null }
     ]
   }, context);
 }
