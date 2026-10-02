@@ -118,15 +118,7 @@ export async function addCollectionPayment(
 
   const created = await recordDeliveryCollection(db, input.deliveryOrderId, sessionId, input, context);
 
-  const [linked] = await db.insert(driverCollectionPayments).values({
-    id: randomUUID(),
-    sessionId,
-    paymentId: created.payment.id,
-    addedBy: context.actorId
-  }).returning();
-
-  if (!linked) throw new ApplicationError("COLLECTION_PAYMENT_LINK_FAILED", 500, "تعذر ربط الدفعة بجلسة التحصيل");
-  return { ...created, collectionPayment: linked };
+  return created;
 }
 
 export async function closeCollection(
