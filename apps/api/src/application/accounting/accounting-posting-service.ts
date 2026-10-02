@@ -39,7 +39,7 @@ async function postOperationalJournal(
   return posted.entry.id;
 }
 
-async function reverseSourceJournal(
+export async function reverseSourceJournal(
   db: Database,
   sourceEventKey: string,
   context: { actorId: string; requestId: string; idempotencyKey: string }
@@ -134,6 +134,18 @@ export async function reversePaymentRecorded(
   context: { actorId: string; requestId: string; idempotencyKey: string }
 ): Promise<string> {
   return reverseSourceJournal(db, "payment:" + paymentId + ":recorded", context);
+}
+
+
+export async function postInvoiceVoided(
+  db: Database,
+  invoiceId: string,
+  context: { actorId: string; requestId: string; idempotencyKey: string }
+): Promise<string | null> {
+  const rows = await db.execute(sql`SELECT journal_entry_id FROM invoices WHERE id = ${invoiceId}::uuid FOR UPDATE`);
+  const journalEntryId = (rows.rows[0] as { journal_entry_id?: string | null } | undefined)?.journal_entry_id;
+  if (!journalEntryId) return null;
+  return reverseSourceJournal(db, "invoice:" + invoiceId + ":issued", context);
 }
 
 export async function postInvoiceIssued(db:Database,invoiceId:string,context:{actorId:string;requestId:string;idempotencyKey:string}){
