@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { Decimal } from "decimal.js";
 import type { Database } from "../../db/client.js";
 import { invoices } from "../../db/invoice-schema.js";
@@ -41,7 +41,6 @@ export async function postInvoiceIssued(db:Database,invoiceId:string,context:{ac
   const accounts=await accountIds(db,codes);
   const rate=await resolveRateToBase(db,invoice.currency_code,"USD");
   const lines=[{accountId:accounts.get("1100")!,debitAmount:invoice.total_amount,description:"Accounts receivable",customerId:invoice.customer_id}];
-  let n=2;
   for(const [code,value] of revenue)lines.push({accountId:accounts.get(code)!,creditAmount:value.toFixed(),description:"Revenue",customerId:null});
   if(cogs.gt(0)){lines.push({accountId:accounts.get("5000")!,debitAmount:cogs.toFixed(),description:"Cost of goods sold",customerId:null});lines.push({accountId:accounts.get("1200")!,creditAmount:cogs.toFixed(),description:"Inventory reduction",customerId:null});}
   const created=await createJournal(db,{entryDate:invoice.issue_date,currencyCode:invoice.currency_code,exchangeRateToBase:rate,description:"Invoice "+invoiceId,sourceType:"invoice",sourceId:invoiceId,sourceEventKey:"invoice:"+invoiceId+":issued",lines},context);

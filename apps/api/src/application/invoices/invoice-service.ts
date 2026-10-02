@@ -9,6 +9,7 @@ import { salesOrderLines, salesOrders } from "../../db/sales-schema.js";
 import { ApplicationError } from "../../domain/errors.js";
 import type { Invoice, InvoiceLine, InvoiceStatus } from "../../domain/invoice.js";
 import { recordAuditEvent } from "../audit.js";
+import { postInvoiceIssued } from "../accounting/accounting-posting-service.js";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const createInvoiceInputSchema = z.object({
@@ -61,6 +62,11 @@ export async function issueInvoice(db: Database, invoiceId: string, context: { a
   const now = new Date();
   const [updated] = await db.update(invoices).set({ status: "issued", issueDate: now.toISOString().slice(0, 10), issuedAt: now, updatedAt: now }).where(eq(invoices.id, invoiceId)).returning();
   if (!updated) throw new ApplicationError("INVOICE_UPDATE_FAILED", 500, "تعذر إصدار الفاتورة");
+  try {
+    await postInvoiceIssued(db, invoiceId, context);
+  } catch (error) {
+    throw new ApplicationError("INVOICE_POSTING_FAILED", 409, error instanceof Error ? error.message : "تعذر ترحيل الفاتورة محاسبياً");
+  }
   await recordAuditEvent(db, { actorId: context.actorId, action: "invoice.issued", resourceType: "invoice", resourceId: invoiceId, requestId: context.requestId, idempotencyKey: context.idempotencyKey, metadata: { invoiceNumber: updated.invoiceNumber } });
   const lines = await db.select().from(invoiceLines).where(eq(invoiceLines.invoiceId, invoiceId)).orderBy(invoiceLines.lineNumber);
   return { invoice: toInvoice(updated), lines: lines.map(toLine) };

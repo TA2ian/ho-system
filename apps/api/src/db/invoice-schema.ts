@@ -26,6 +26,7 @@ export const invoices = pgTable("invoices", {
   notes: text("notes"),
   createdBy: uuid("created_by").notNull().references(() => users.id),
   issuedAt: timestamp("issued_at", { withTimezone: true }),
+  journalEntryId: uuid("journal_entry_id"),
   voidedAt: timestamp("voided_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
