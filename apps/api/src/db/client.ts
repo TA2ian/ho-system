@@ -9,8 +9,9 @@ import * as invoiceSchema from "./invoice-schema.js";
 import * as paymentSchema from "./payment-schema.js";
 import * as paymentReversalSchema from "./payment-reversal-schema.js";
 import * as deliverySchema from "./delivery-schema.js";
+import * as campaignSchema from "./campaign-schema.js";
 
-export const allSchema = { ...schema, customers, ...catalogSchema, ...salesSchema, ...invoiceSchema, ...paymentSchema, ...paymentReversalSchema, ...deliverySchema };
+export const allSchema = { ...schema, customers, ...catalogSchema, ...salesSchema, ...invoiceSchema, ...paymentSchema, ...paymentReversalSchema, ...deliverySchema, ...campaignSchema };
 
 export type Database = NodePgDatabase<typeof allSchema>;
 
