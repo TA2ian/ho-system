@@ -22,6 +22,7 @@ import { assignDeliveryOrder, assignDeliveryOrderInputSchema, createDeliveryOrde
 import { campaignStatusInputSchema, createCampaign, createCampaignInputSchema, getCampaign, linkCampaignInvoice, linkCampaignInvoiceInputSchema, listCampaigns, recordCampaignSpend, recordCampaignSpendInputSchema, transitionCampaign } from "./application/campaigns/campaign-service.js";
 import { completeEmployeeTask, createCompensationRule, createCompensationRuleInputSchema, createEmployeeTask, createEmployeeTaskInputSchema, listCompensationRules, listEmployeeTasks } from "./application/employees/employee-service.js";
 import { createExpense, createExpenseInputSchema, listExpenses, voidExpense, voidExpenseInputSchema } from "./application/expenses/expense-service.js";
+import { closePeriod, createAccount, createAccountInputSchema, createJournal, createJournalInputSchema, createPeriod, createPeriodInputSchema, createReversalInputSchema, getJournal, listAccounts, listPeriods, postJournal, reverseJournal } from "./application/accounting/accounting-service.js";
 
 export function buildApp(dependencies: {
   db: Database;
@@ -595,6 +596,63 @@ export function buildApp(dependencies: {
     if (!/^[0-9a-fA-F-]{36}$/.test(request.params.id)) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "معرّف طلب التوصيل غير صالح" });
     const privileged = request.principal.permissions.has("delivery.manage");
     return reply.send({ data: await getDeliveryOrder(dependencies.db, request.params.id, request.principal.userId, privileged) });
+  });
+
+  app.get("/api/v1/accounting/periods", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});
+    assertPermission(request.principal,"accounting.journal.read");
+    return reply.send({data:await listPeriods(dependencies.db)});
+  });
+  app.post("/api/v1/accounting/periods", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});
+    assertPermission(request.principal,"accounting.periods.manage");
+    const parsed=createPeriodInputSchema.safeParse(request.body);if(!parsed.success)return reply.status(400).send({error:"VALIDATION_ERROR",message:"بيانات الفترة غير صالحة",issues:parsed.error.flatten()});
+    const key=request.headers["idempotency-key"];if(typeof key!=="string"||key.trim().length<16||key.length>255)return reply.status(400).send({error:"IDEMPOTENCY_KEY_REQUIRED",message:"يجب إرسال مفتاح Idempotency-Key صالح"});
+    const idemKey=key.trim(),scope=`accounting:period:create:${request.principal.userId}`,hash=hashRequestBody(parsed.data);
+    const result=await withTransaction(dependencies.pool,async tx=>{const idem=await beginIdempotency(tx,scope,idemKey,hash);if(idem.kind==="replay")return idem;if(idem.kind==="conflict")throw new ApplicationError(idem.reason==="KEY_REUSED"?"IDEMPOTENCY_KEY_REUSED":"IDEMPOTENCY_IN_PROGRESS",409,idem.reason==="KEY_REUSED"?"تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة":"الطلب نفسه قيد المعالجة");const created=await createPeriod(tx,parsed.data,{actorId:request.principal!.userId,requestId:request.id,idempotencyKey:idemKey});const body={data:created};await completeIdempotency(tx,idem.id,201,body);return {kind:"new" as const,status:201,body};});return reply.status(result.status).send(result.body);
+  });
+  app.post<{Params:{id:string}}>("/api/v1/accounting/periods/:id/close",async(request,reply)=>{
+    if(!request.principal)return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});assertPermission(request.principal,"accounting.periods.manage");
+    if(!/^[0-9a-fA-F-]{36}$/.test(request.params.id))return reply.status(400).send({error:"VALIDATION_ERROR",message:"معرّف الفترة غير صالح"});
+    const key=request.headers["idempotency-key"];if(typeof key!=="string"||key.trim().length<16||key.length>255)return reply.status(400).send({error:"IDEMPOTENCY_KEY_REQUIRED",message:"يجب إرسال مفتاح Idempotency-Key صالح"});
+    const idemKey=key.trim(),scope=`accounting:period:close:${request.params.id}:${request.principal.userId}`,hash=hashRequestBody({periodId:request.params.id});
+    const result=await withTransaction(dependencies.pool,async tx=>{const idem=await beginIdempotency(tx,scope,idemKey,hash);if(idem.kind==="replay")return idem;if(idem.kind==="conflict")throw new ApplicationError(idem.reason==="KEY_REUSED"?"IDEMPOTENCY_KEY_REUSED":"IDEMPOTENCY_IN_PROGRESS",409,idem.reason==="KEY_REUSED"?"تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة":"الطلب نفسه قيد المعالجة");const closed=await closePeriod(tx,request.params.id,{actorId:request.principal!.userId,requestId:request.id,idempotencyKey:idemKey});const body={data:closed};await completeIdempotency(tx,idem.id,200,body);return {kind:"new" as const,status:200,body};});return reply.status(result.status).send(result.body);
+  });
+  app.get("/api/v1/accounting/accounts",async(request,reply)=>{
+    if(!request.principal)return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});assertPermission(request.principal,"accounting.journal.read");return reply.send({data:await listAccounts(dependencies.db)});
+  });
+  app.post("/api/v1/accounting/accounts",async(request,reply)=>{
+    if(!request.principal)return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});assertPermission(request.principal,"accounting.accounts.manage");
+    const parsed=createAccountInputSchema.safeParse(request.body);if(!parsed.success)return reply.status(400).send({error:"VALIDATION_ERROR",message:"بيانات الحساب غير صالحة",issues:parsed.error.flatten()});
+    const key=request.headers["idempotency-key"];if(typeof key!=="string"||key.trim().length<16||key.length>255)return reply.status(400).send({error:"IDEMPOTENCY_KEY_REQUIRED",message:"يجب إرسال مفتاح Idempotency-Key صالح"});
+    const idemKey=key.trim(),scope=`accounting:account:create:${request.principal.userId}`,hash=hashRequestBody(parsed.data);
+    const result=await withTransaction(dependencies.pool,async tx=>{const idem=await beginIdempotency(tx,scope,idemKey,hash);if(idem.kind==="replay")return idem;if(idem.kind==="conflict")throw new ApplicationError(idem.reason==="KEY_REUSED"?"IDEMPOTENCY_KEY_REUSED":"IDEMPOTENCY_IN_PROGRESS",409,idem.reason==="KEY_REUSED"?"تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة":"الطلب نفسه قيد المعالجة");const created=await createAccount(tx,parsed.data,{actorId:request.principal!.userId,requestId:request.id,idempotencyKey:idemKey});const body={data:created};await completeIdempotency(tx,idem.id,201,body);return {kind:"new" as const,status:201,body};});return reply.status(result.status).send(result.body);
+  });
+  app.get<{Params:{id:string}}>("/api/v1/accounting/journals/:id",async(request,reply)=>{
+    if(!request.principal)return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});assertPermission(request.principal,"accounting.journal.read");
+    if(!/^[0-9a-fA-F-]{36}$/.test(request.params.id))return reply.status(400).send({error:"VALIDATION_ERROR",message:"معرّف القيد غير صالح"});return reply.send({data:await getJournal(dependencies.db,request.params.id)});
+  });
+  app.post("/api/v1/accounting/journals",async(request,reply)=>{
+    if(!request.principal)return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});assertPermission(request.principal,"accounting.journal.post");
+    const parsed=createJournalInputSchema.safeParse(request.body);if(!parsed.success)return reply.status(400).send({error:"VALIDATION_ERROR",message:"بيانات القيد غير صالحة",issues:parsed.error.flatten()});
+    const key=request.headers["idempotency-key"];if(typeof key!=="string"||key.trim().length<16||key.length>255)return reply.status(400).send({error:"IDEMPOTENCY_KEY_REQUIRED",message:"يجب إرسال مفتاح Idempotency-Key صالح"});
+    const idemKey=key.trim(),scope=`accounting:journal:create:${request.principal.userId}`,hash=hashRequestBody(parsed.data);
+    const result=await withTransaction(dependencies.pool,async tx=>{const idem=await beginIdempotency(tx,scope,idemKey,hash);if(idem.kind==="replay")return idem;if(idem.kind==="conflict")throw new ApplicationError(idem.reason==="KEY_REUSED"?"IDEMPOTENCY_KEY_REUSED":"IDEMPOTENCY_IN_PROGRESS",409,idem.reason==="KEY_REUSED"?"تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة":"الطلب نفسه قيد المعالجة");const created=await createJournal(tx,parsed.data,{actorId:request.principal!.userId,requestId:request.id,idempotencyKey:idemKey});const body={data:created};await completeIdempotency(tx,idem.id,201,body);return {kind:"new" as const,status:201,body};});return reply.status(result.status).send(result.body);
+  });
+  app.post<{Params:{id:string}}>("/api/v1/accounting/journals/:id/post",async(request,reply)=>{
+    if(!request.principal)return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});assertPermission(request.principal,"accounting.journal.post");
+    if(!/^[0-9a-fA-F-]{36}$/.test(request.params.id))return reply.status(400).send({error:"VALIDATION_ERROR",message:"معرّف القيد غير صالح"});
+    const key=request.headers["idempotency-key"];if(typeof key!=="string"||key.trim().length<16||key.length>255)return reply.status(400).send({error:"IDEMPOTENCY_KEY_REQUIRED",message:"يجب إرسال مفتاح Idempotency-Key صالح"});
+    const idemKey=key.trim(),scope=`accounting:journal:post:${request.params.id}:${request.principal.userId}`,hash=hashRequestBody({entryId:request.params.id});
+    const result=await withTransaction(dependencies.pool,async tx=>{const idem=await beginIdempotency(tx,scope,idemKey,hash);if(idem.kind==="replay")return idem;if(idem.kind==="conflict")throw new ApplicationError(idem.reason==="KEY_REUSED"?"IDEMPOTENCY_KEY_REUSED":"IDEMPOTENCY_IN_PROGRESS",409,idem.reason==="KEY_REUSED"?"تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة":"الطلب نفسه قيد المعالجة");const posted=await postJournal(tx,request.params.id,{actorId:request.principal!.userId,requestId:request.id,idempotencyKey:idemKey});const body={data:posted};await completeIdempotency(tx,idem.id,200,body);return {kind:"new" as const,status:200,body};});return reply.status(result.status).send(result.body);
+  });
+  app.post<{Params:{id:string}}>("/api/v1/accounting/journals/:id/reverse",async(request,reply)=>{
+    if(!request.principal)return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});assertPermission(request.principal,"accounting.journal.post");
+    if(!/^[0-9a-fA-F-]{36}$/.test(request.params.id))return reply.status(400).send({error:"VALIDATION_ERROR",message:"معرّف القيد غير صالح"});
+    const parsed=createReversalInputSchema.safeParse(request.body);if(!parsed.success)return reply.status(400).send({error:"VALIDATION_ERROR",message:"بيانات العكس غير صالحة",issues:parsed.error.flatten()});
+    const key=request.headers["idempotency-key"];if(typeof key!=="string"||key.trim().length<16||key.length>255)return reply.status(400).send({error:"IDEMPOTENCY_KEY_REQUIRED",message:"يجب إرسال مفتاح Idempotency-Key صالح"});
+    const idemKey=key.trim(),scope=`accounting:journal:reverse:${request.params.id}:${request.principal.userId}`,hash=hashRequestBody(parsed.data);
+    const result=await withTransaction(dependencies.pool,async tx=>{const idem=await beginIdempotency(tx,scope,idemKey,hash);if(idem.kind==="replay")return idem;if(idem.kind==="conflict")throw new ApplicationError(idem.reason==="KEY_REUSED"?"IDEMPOTENCY_KEY_REUSED":"IDEMPOTENCY_IN_PROGRESS",409,idem.reason==="KEY_REUSED"?"تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة":"الطلب نفسه قيد المعالجة");const reversed=await reverseJournal(tx,request.params.id,parsed.data,{actorId:request.principal!.userId,requestId:request.id,idempotencyKey:idemKey});const body={data:reversed};await completeIdempotency(tx,idem.id,200,body);return {kind:"new" as const,status:200,body};});return reply.status(result.status).send(result.body);
   });
 
   app.get("/api/v1/expenses", async (request, reply) => {
