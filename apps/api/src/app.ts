@@ -10,7 +10,7 @@ import { createCustomer, createCustomerInputSchema, listCustomers } from "./appl
 import { beginIdempotency, completeIdempotency, hashRequestBody } from "./application/idempotency.js";
 import { assertPermission } from "./identity/auth.js";
 import type { AuthenticationAdapter } from "./identity/auth.js";
-import { registerAuthentication } from "./identity/middleware.js";
+import { authenticateRequest } from "./identity/middleware.js";
 import { ApplicationError } from "./domain/errors.js";
 
 export function buildApp(dependencies: {
@@ -19,20 +19,17 @@ export function buildApp(dependencies: {
   authAdapter: AuthenticationAdapter;
 }) {
   const app = Fastify({
-    logger: {
-      level: config.NODE_ENV === "production" ? "info" : "debug"
-    },
+    logger: { level: config.NODE_ENV === "production" ? "info" : "debug" },
     disableRequestLogging: false
   });
 
   app.register(helmet);
   app.register(cors, { origin: config.CORS_ORIGIN });
-
   app.decorateRequest("principal", null);
 
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health" || request.url === "/ready") return;
-    registerAuthentication(request, reply, {
+    await authenticateRequest(request, reply, {
       db: dependencies.db,
       adapter: dependencies.authAdapter
     });
@@ -44,25 +41,21 @@ export function buildApp(dependencies: {
   }));
 
   app.get("/api/v1/customers", async (request, reply) => {
-    if (!request.principal) {
-      return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
-    }
-    try {
-      assertPermission(request.principal, "customers.read");
-      const customerRows = await listCustomers(dependencies.db);
-      return reply.send({ data: customerRows });
-    } catch (error) {
-      if (error instanceof Error && error.message === "FORBIDDEN") {
-        return reply.status(403).send({ error: "FORBIDDEN", message: "ليس لديك صلاحية الوصول إلى العملاء" });
-      }
-      throw error;
-    }
+    if (!request.principal) return reply.status(401).send({
+      error: "UNAUTHORIZED",
+      message: "المصادقة مطلوبة"
+    });
+
+    assertPermission(request.principal, "customers.read");
+    const customerRows = await listCustomers(dependencies.db);
+    return reply.send({ data: customerRows });
   });
 
   app.post("/api/v1/customers", async (request, reply) => {
-    if (!request.principal) {
-      return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
-    }
+    if (!request.principal) return reply.status(401).send({
+      error: "UNAUTHORIZED",
+      message: "المصادقة مطلوبة"
+    });
 
     const parsed = createCustomerInputSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -73,32 +66,28 @@ export function buildApp(dependencies: {
       });
     }
 
-    try {
-      assertPermission(request.principal, "customers.write");
-    } catch (error) {
-      if (error instanceof Error && error.message === "FORBIDDEN") {
-        return reply.status(403).send({ error: "FORBIDDEN", message: "ليس لديك صلاحية إنشاء العملاء" });
-      }
-      throw error;
-    }
+    assertPermission(request.principal, "customers.write");
 
     const idempotencyKey = request.headers["idempotency-key"];
-    if (typeof idempotencyKey !== "string" || idempotencyKey.trim().length < 16 || idempotencyKey.length > 255) {
+    if (
+      typeof idempotencyKey !== "string" ||
+      idempotencyKey.trim().length < 16 ||
+      idempotencyKey.length > 255
+    ) {
       return reply.status(400).send({
         error: "IDEMPOTENCY_KEY_REQUIRED",
         message: "يجب إرسال مفتاح Idempotency-Key صالح"
       });
     }
 
+    const key = idempotencyKey.trim();
     const scope = `customer:create:${request.principal.userId}`;
     const requestHash = hashRequestBody(parsed.data);
 
     const result = await withTransaction(dependencies.pool, async (tx) => {
-      const idem = await beginIdempotency(tx, scope, idempotencyKey.trim(), requestHash);
+      const idem = await beginIdempotency(tx, scope, key, requestHash);
 
-      if (idem.kind === "replay") {
-        return idem;
-      }
+      if (idem.kind === "replay") return idem;
 
       if (idem.kind === "conflict") {
         throw new ApplicationError(
@@ -113,7 +102,7 @@ export function buildApp(dependencies: {
       const customer = await createCustomer(tx, parsed.data, {
         actorId: request.principal!.userId,
         requestId: request.id,
-        idempotencyKey: idempotencyKey.trim()
+        idempotencyKey: key
       });
 
       const body = { data: customer };
@@ -121,7 +110,7 @@ export function buildApp(dependencies: {
       return { kind: "new" as const, status: 201, body };
     });
 
-    return reply.status(result.kind === "replay" ? result.status : result.status).send(result.body);
+    return reply.status(result.status).send(result.body);
   });
 
   app.get("/ready", async (_request, reply) => {
@@ -145,6 +134,13 @@ export function buildApp(dependencies: {
       return reply.status(error.status).send({
         error: error.code,
         message: error.message
+      });
+    }
+
+    if (error.message === "FORBIDDEN") {
+      return reply.status(403).send({
+        error: "FORBIDDEN",
+        message: "ليس لديك الصلاحية لتنفيذ هذا الإجراء"
       });
     }
 
