@@ -3,6 +3,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "../../db/client.js";
 import { deliveryOrderPayments, deliveryOrders } from "../../db/delivery-schema.js";
+import { driverCollectionPayments } from "../../db/driver-collection-schema.js";
 import { roles, userRoles, users } from "../../db/schema.js";
 import { ApplicationError } from "../../domain/errors.js";
 import { deliveryStatusSchema, deliveryTypeSchema } from "../../domain/delivery.js";
@@ -149,11 +150,29 @@ export async function recordDeliveryCollection(db: Database, deliveryOrderId: st
   if (row.deliveryType !== "external" || !row.invoiceId || !row.customerId) throw new ApplicationError("DELIVERY_NOT_COLLECTIBLE", 409, "هذا التسليم لا يحمل ذمة مالية قابلة للتحصيل");
   if (row.assignedDriverId !== context.actorId) throw new ApplicationError("DELIVERY_DRIVER_MISMATCH", 403, "طلب التوصيل غير مسند إليك");
   if (!["out_for_delivery", "delivered"].includes(row.status)) throw new ApplicationError("DELIVERY_NOT_READY_FOR_COLLECTION", 409, "لا يمكن التحصيل قبل بدء التوصيل");
+  const sessionResult = await db.execute(sql`
+    SELECT id, status, driver_user_id
+    FROM driver_collection_sessions
+    WHERE id = ${sessionId}::uuid
+    FOR UPDATE
+  `);
+  const session = sessionResult.rows[0] as { id: string; status: string; driver_user_id: string } | undefined;
+  if (!session) throw new ApplicationError("COLLECTION_SESSION_NOT_FOUND", 404, "جلسة التحصيل غير موجودة");
+  if (session.driver_user_id !== context.actorId) throw new ApplicationError("COLLECTION_SESSION_DRIVER_MISMATCH", 403, "جلسة التحصيل ليست تابعة لك");
+  if (session.status !== "open") throw new ApplicationError("COLLECTION_SESSION_NOT_OPEN", 409, "جلسة التحصيل مغلقة");
+
   const paymentInput = { ...input, customerId: row.customerId };
   const created = await createPayment(db, paymentInput, context);
   const allocated = await allocatePayment(db, created.payment.id, { invoiceId: row.invoiceId, amount: input.amount }, context);
+  const [collectionPayment] = await db.insert(driverCollectionPayments).values({
+    id: randomUUID(),
+    sessionId,
+    paymentId: created.payment.id,
+    addedBy: context.actorId
+  }).returning();
+  if (!collectionPayment) throw new ApplicationError("COLLECTION_PAYMENT_LINK_FAILED", 500, "تعذر ربط الدفعة بجلسة التحصيل");
   const [linked] = await db.insert(deliveryOrderPayments).values({ id: randomUUID(), deliveryOrderId, paymentId: created.payment.id }).returning();
   if (!linked) throw new ApplicationError("DELIVERY_PAYMENT_LINK_FAILED", 500, "تعذر ربط الدفعة بطلب التوصيل");
   await recordAuditEvent(db, { actorId: context.actorId, action: "delivery.payment_collected", resourceType: "delivery_order", resourceId: deliveryOrderId, requestId: context.requestId, idempotencyKey: context.idempotencyKey, metadata: { paymentId: created.payment.id, invoiceId: row.invoiceId, amount: input.amount, currencyCode: input.currencyCode, sessionId } });
-  return { ...allocated, deliveryOrderPayment: linked };
+  return { ...allocated, deliveryOrderPayment: linked, collectionPayment };
 }
