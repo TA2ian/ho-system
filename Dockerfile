@@ -16,6 +16,7 @@ COPY package*.json ./
 RUN npm install --omit=dev && npm cache clean --force
 
 COPY --from=build /app/apps/api/dist ./apps/api/dist
+COPY --from=build /app/apps/api/migrations ./apps/api/migrations
 
 USER node
 EXPOSE 3000
