@@ -111,3 +111,70 @@ export async function createSalesOrder(
 
   return { order: toOrder(order), lines };
 }
+
+
+export async function getSalesOrder(
+  db: Database,
+  orderId: string
+): Promise<{ order: SalesOrder; lines: SalesOrderLine[] }> {
+  const [order] = await db.select().from(salesOrders)
+    .where(eq(salesOrders.id, orderId))
+    .limit(1);
+  if (!order) throw new ApplicationError("SALES_ORDER_NOT_FOUND", 404, "طلب البيع غير موجود");
+
+  const lines = await db.select().from(salesOrderLines)
+    .where(eq(salesOrderLines.salesOrderId, orderId))
+    .orderBy(salesOrderLines.lineNumber);
+
+  return { order: toOrder(order), lines: lines.map(toLine) };
+}
+
+export async function transitionSalesOrder(
+  db: Database,
+  orderId: string,
+  target: "confirmed" | "cancelled",
+  context: { actorId: string; requestId: string; idempotencyKey: string }
+): Promise<{ order: SalesOrder; lines: SalesOrderLine[] }> {
+  const rows = await db.execute(
+    `SELECT id, status FROM sales_orders WHERE id = '${orderId}'::uuid FOR UPDATE`
+  );
+  const locked = rows.rows[0] as { id?: string; status?: string } | undefined;
+  if (!locked) throw new ApplicationError("SALES_ORDER_NOT_FOUND", 404, "طلب البيع غير موجود");
+
+  if (locked.status !== "draft") {
+    throw new ApplicationError(
+      "SALES_ORDER_INVALID_STATE",
+      409,
+      "لا يمكن تغيير حالة طلب البيع بعد مغادرة حالة المسودة"
+    );
+  }
+
+  const now = new Date();
+  const [updated] = await db.update(salesOrders)
+    .set({
+      status: target,
+      confirmedAt: target === "confirmed" ? now : null,
+      cancelledAt: target === "cancelled" ? now : null,
+      updatedAt: now
+    })
+    .where(eq(salesOrders.id, orderId))
+    .returning();
+
+  if (!updated) throw new ApplicationError("SALES_ORDER_UPDATE_FAILED", 500, "تعذر تحديث طلب البيع");
+
+  await recordAuditEvent(db, {
+    actorId: context.actorId,
+    action: `sales_order.${target}`,
+    resourceType: "sales_order",
+    resourceId: orderId,
+    requestId: context.requestId,
+    idempotencyKey: context.idempotencyKey,
+    metadata: { previousStatus: "draft", newStatus: target, orderNumber: updated.orderNumber }
+  });
+
+  const lines = await db.select().from(salesOrderLines)
+    .where(eq(salesOrderLines.salesOrderId, orderId))
+    .orderBy(salesOrderLines.lineNumber);
+
+  return { order: toOrder(updated), lines: lines.map(toLine) };
+}
