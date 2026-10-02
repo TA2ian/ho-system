@@ -41,8 +41,10 @@
 - Payments
 - Campaigns and advertising partner scopes
 - Delivery and driver workflows
+- Driver collection sessions and manual settlement
 
 ## Phase 5 — Accounting integrity
+- Payment reversal-aware receivables calculations
 - Financial posting rules
 - Reversal rules
 - Period controls
