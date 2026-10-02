@@ -4,7 +4,7 @@ import { config } from "../config.js";
 import * as schema from "./schema.js";
 import { customers } from "./customer-schema.js";
 
-const allSchema = { ...schema, customers };
+export const allSchema = { ...schema, customers };
 
 export type Database = NodePgDatabase<typeof allSchema>;
 
