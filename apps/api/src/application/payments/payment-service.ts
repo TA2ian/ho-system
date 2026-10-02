@@ -6,6 +6,7 @@ import type { Database } from "../../db/client.js";
 import { customers } from "../../db/customer-schema.js";
 import { invoices } from "../../db/invoice-schema.js";
 import { paymentAllocations, payments } from "../../db/payment-schema.js";
+import { paymentAllocationReversals } from "../../db/payment-reversal-schema.js";
 import { ApplicationError } from "../../domain/errors.js";
 import type { Payment, PaymentAllocation, PaymentMethod, PaymentStatus } from "../../domain/payment.js";
 import { recordAuditEvent } from "../audit.js";
@@ -150,4 +151,60 @@ export async function allocatePayment(
     ...result,
     invoiceOutstanding: invoiceOutstanding.sub(requested).toFixed()
   };
+}
+
+export const reversePaymentInputSchema = z.object({
+  reason: z.string().trim().min(3).max(500)
+});
+
+export async function reversePayment(
+  db: Database,
+  paymentId: string,
+  input: z.infer<typeof reversePaymentInputSchema>,
+  context: { actorId: string; requestId: string; idempotencyKey: string }
+): Promise<{ payment: Payment; allocations: PaymentAllocation[] }> {
+  const rows = await db.execute(sql`SELECT id, status FROM payments WHERE id = ${paymentId}::uuid FOR UPDATE`);
+  const payment = rows.rows[0] as { id?: string; status?: string } | undefined;
+  if (!payment) throw new ApplicationError("PAYMENT_NOT_FOUND", 404, "الدفعة غير موجودة");
+  if (payment.status !== "recorded") throw new ApplicationError("PAYMENT_ALREADY_VOIDED", 409, "الدفعة ليست في حالة مسجلة");
+
+  const allocations = await db.select().from(paymentAllocations)
+    .where(eq(paymentAllocations.paymentId, paymentId))
+    .orderBy(paymentAllocations.createdAt);
+
+  for (const allocation of allocations) {
+    const reversedRows = await db.execute(sql`SELECT COALESCE(SUM(amount), 0)::text AS total FROM payment_allocation_reversals WHERE payment_allocation_id = ${allocation.id}::uuid`);
+    const reversed = new Decimal(String((reversedRows.rows[0] as { total?: string }).total ?? "0"));
+    const remaining = new Decimal(allocation.amount).sub(reversed);
+    if (remaining.gt(0)) {
+      await db.insert(paymentAllocationReversals).values({
+        id: randomUUID(),
+        paymentAllocationId: allocation.id,
+        amount: remaining.toFixed(),
+        currencyCode: allocation.currencyCode,
+        reason: input.reason,
+        reversedAt: new Date(),
+        reversedBy: context.actorId
+      });
+    }
+  }
+
+  const now = new Date();
+  const [updated] = await db.update(payments)
+    .set({ status: "voided", voidedAt: now, updatedAt: now })
+    .where(eq(payments.id, paymentId))
+    .returning();
+  if (!updated) throw new ApplicationError("PAYMENT_UPDATE_FAILED", 500, "تعذر عكس الدفعة");
+
+  await recordAuditEvent(db, {
+    actorId: context.actorId,
+    action: "payment.reversed",
+    resourceType: "payment",
+    resourceId: paymentId,
+    requestId: context.requestId,
+    idempotencyKey: context.idempotencyKey,
+    metadata: { reason: input.reason }
+  });
+
+  return paymentWithAllocations(db, paymentId);
 }
