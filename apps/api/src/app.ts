@@ -255,7 +255,7 @@ export function buildApp(dependencies: {
     return reply.status(result.status).send(result.body);
   });
 
-  app.get("/api/v1/sales-orders/:id", async (request, reply) => {
+  app.get<{ Params: { id: string } }>("/api/v1/sales-orders/:id", async (request, reply) => {
     if (!request.principal) return reply.status(401).send({
       error: "UNAUTHORIZED",
       message: "المصادقة مطلوبة"
@@ -286,8 +286,8 @@ export function buildApp(dependencies: {
 
     assertPermission(request.principal, "sales.manage");
 
-    const params = request.params as { id?: string };
-    if (!params.id || !/^[0-9a-fA-F-]{36}$/.test(params.id)) {
+    const params = request.params;
+    if (!/^[0-9a-fA-F-]{36}$/.test(params.id)) {
       return reply.status(400).send({
         error: "VALIDATION_ERROR",
         message: "معرّف طلب البيع غير صالح"
