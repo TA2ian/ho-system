@@ -25,12 +25,12 @@ async function runMigrations(pool: Pool): Promise<void> {
     );
 
     const files = (await readdir(migrationsDirectory))
-      .filter((file) => /^\\d+_.+\\.sql$/.test(file))
+      .filter((file) => file.endsWith(".sql"))
       .sort();
 
     for (const file of files) {
       const sql = await readFile(join(migrationsDirectory, file), "utf8");
-      const version = file.replace(/\\.sql$/, "");
+      const version = file.slice(0, -4);
       const digest = checksum(sql);
 
       const existing = await client.query<{ checksum: string }>(
