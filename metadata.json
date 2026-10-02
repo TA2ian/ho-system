@@ -1,6 +1,0 @@
-{
-  "name": "HO Network Ledger",
-  "description": "HO Network Management and Double-Entry Ledger System",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
