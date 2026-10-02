@@ -40,7 +40,6 @@ export const paymentAllocations = pgTable("payment_allocations", {
   currencyCode: text("currency_code").notNull().references(() => currencies.code),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 }, (table) => [
-  uniqueIndex("payment_allocations_payment_invoice_uq").on(table.paymentId, table.invoiceId),
   index("payment_allocations_payment_idx").on(table.paymentId),
   index("payment_allocations_invoice_idx").on(table.invoiceId)
 ]);
