@@ -111,19 +111,27 @@ export async function allocatePayment(
   if (invoice.customer_id !== payment.customer_id) throw new ApplicationError("CUSTOMER_MISMATCH", 409, "الدفعة والفاتورة تخصان عميلين مختلفين");
   if (invoice.currency_code !== payment.currency_code) throw new ApplicationError("CURRENCY_MISMATCH", 409, "يجب أن تتطابق عملة الدفعة مع عملة الفاتورة");
 
-  const existing = await db.select().from(paymentAllocations).where(and(
-    eq(paymentAllocations.paymentId, paymentId),
-    eq(paymentAllocations.invoiceId, input.invoiceId)
-  )).limit(1);
-  if (existing[0]) throw new ApplicationError("PAYMENT_ALREADY_ALLOCATED", 409, "تم تخصيص هذه الدفعة لهذه الفاتورة مسبقاً");
-
-  const allocatedPaymentRows = await db.execute(sql`SELECT COALESCE(SUM(amount), 0)::text AS total FROM payment_allocations WHERE payment_id = ${paymentId}::uuid`);
+  const allocatedPaymentRows = await db.execute(sql`
+    SELECT (
+      COALESCE(SUM(pa.amount), 0) - COALESCE(SUM(par.amount), 0)
+    )::text AS total
+    FROM payment_allocations pa
+    LEFT JOIN payment_allocation_reversals par ON par.payment_allocation_id = pa.id
+    WHERE pa.payment_id = ${paymentId}::uuid
+  `);
   const allocatedPayment = new Decimal(String((allocatedPaymentRows.rows[0] as { total?: string }).total ?? "0"));
   const paymentRemaining = new Decimal(payment.amount).sub(allocatedPayment);
   const requested = new Decimal(input.amount);
   if (requested.gt(paymentRemaining)) throw new ApplicationError("PAYMENT_OVER_ALLOCATION", 409, "مبلغ التخصيص يتجاوز الرصيد المتبقي من الدفعة");
 
-  const allocatedInvoiceRows = await db.execute(sql`SELECT COALESCE(SUM(amount), 0)::text AS total FROM payment_allocations WHERE invoice_id = ${input.invoiceId}::uuid`);
+  const allocatedInvoiceRows = await db.execute(sql`
+    SELECT (
+      COALESCE(SUM(pa.amount), 0) - COALESCE(SUM(par.amount), 0)
+    )::text AS total
+    FROM payment_allocations pa
+    LEFT JOIN payment_allocation_reversals par ON par.payment_allocation_id = pa.id
+    WHERE pa.invoice_id = ${input.invoiceId}::uuid
+  `);
   const allocatedInvoice = new Decimal(String((allocatedInvoiceRows.rows[0] as { total?: string }).total ?? "0"));
   const invoiceOutstanding = new Decimal(invoice.total_amount).sub(allocatedInvoice);
   if (requested.gt(invoiceOutstanding)) throw new ApplicationError("INVOICE_OVER_ALLOCATION", 409, "مبلغ التخصيص يتجاوز الرصيد المستحق على الفاتورة");
