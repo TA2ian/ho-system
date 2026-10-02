@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
+import { Decimal } from "decimal.js";
 import { z } from "zod";
 import type { Database } from "../../db/client.js";
 import { expenses } from "../../db/expense-schema.js";
 import { ApplicationError } from "../../domain/errors.js";
 import { recordAuditEvent } from "../audit.js";
 
-const amount=z.string().regex(/^\d+(\.\d{1,10})?$/).refine(v=>Number(v)>0,"المبلغ يجب أن يكون أكبر من صفر");
+const amount=z.string().regex(/^\d+(\.\d{1,10})?$/).refine(v=>new Decimal(v).gt(0),"المبلغ يجب أن يكون أكبر من صفر");
 export const createExpenseInputSchema=z.object({
   category:z.string().trim().min(1).max(100),
   vendorName:z.string().trim().max(255).nullable().optional(),
