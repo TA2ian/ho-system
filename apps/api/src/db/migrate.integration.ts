@@ -14,7 +14,7 @@ try {
   const first = await pool.query<{ count: string }>(
     "SELECT count(*)::text AS count FROM schema_migrations"
   );
-  const expectedMigrations = 8;
+  const expectedMigrations = 9;
   if (Number(first.rows[0]?.count) !== expectedMigrations) {
     throw new Error(
       `Expected ${expectedMigrations} migrations, found ${first.rows[0]?.count ?? "none"}`
@@ -34,6 +34,7 @@ try {
     "invoice_lines",
     "payments",
     "payment_allocations",
+    "payment_allocation_reversals",
     "audit_events",
     "idempotency_keys",
     "exchange_rates"
