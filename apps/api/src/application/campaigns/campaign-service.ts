@@ -22,7 +22,7 @@ export const createCampaignInputSchema = z.object({
   grossAmount: amount,
   plannedAdSpend: amount,
   managementFeeAmount: amount,
-  partnerSharePercent: z.string().regex(/^\d+(\.\d{1,4})?$/).refine(v => new Decimal(v).gte(0).and(new Decimal(v).lte(100)), "نسبة الشريك يجب أن تكون بين 0 و100"),
+  partnerSharePercent: z.string().regex(/^\d+(\.\d{1,4})?$/).refine(v => new Decimal(v).gte(0) && new Decimal(v).lte(100), "نسبة الشريك يجب أن تكون بين 0 و100"),
   startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   notes: z.string().trim().max(2000).nullable().optional()
