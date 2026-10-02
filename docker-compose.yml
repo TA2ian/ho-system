@@ -4,9 +4,9 @@ services:
     environment:
       POSTGRES_DB: ho_network
       POSTGRES_USER: ho
-      POSTGRES_PASSWORD: change-me
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,6 +22,7 @@ services:
       HOST: 0.0.0.0
       PORT: 3000
       CORS_ORIGIN: http://localhost:5173
+      DATABASE_URL: postgresql://ho:${POSTGRES_PASSWORD:-change-me}@postgres:5432/ho_network
     ports:
       - "3000:3000"
     depends_on:
