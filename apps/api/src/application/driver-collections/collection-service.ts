@@ -1,0 +1,194 @@
+import { randomUUID } from "node:crypto";
+import { and, asc, eq } from "drizzle-orm";
+import { Decimal } from "decimal.js";
+import { z } from "zod";
+import type { Database } from "../../db/client.js";
+import {
+  driverCollectionPayments,
+  driverCollectionSessions,
+  driverCollectionSettlementCounts,
+  payments
+} from "../../db/payment-schema.js";
+import { ApplicationError } from "../../domain/errors.js";
+import { createPayment, createPaymentInputSchema } from "./payment-service.js";
+
+const decimalInput = z.string()
+  .regex(/^\d+(\.\d{1,10})?$/)
+  .refine((value) => new Decimal(value).gte(0), "المبلغ يجب ألا يكون سالباً");
+
+const methodSchema = z.enum(["cash", "sham_cash"]);
+
+export const openCollectionInputSchema = z.object({
+  driverUserId: z.string().uuid(),
+  notes: z.string().trim().max(2000).nullable().optional()
+});
+
+export const addCollectionPaymentInputSchema = createPaymentInputSchema;
+
+export const closeCollectionInputSchema = z.object({
+  counts: z.array(z.object({
+    currencyCode: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
+    method: methodSchema,
+    countedAmount: decimalInput
+  })).max(10),
+  notes: z.string().trim().max(2000).nullable().optional()
+});
+
+async function getSession(db: Database, sessionId: string) {
+  const [session] = await db.select().from(driverCollectionSessions)
+    .where(eq(driverCollectionSessions.id, sessionId)).limit(1);
+  if (!session) throw new ApplicationError("COLLECTION_NOT_FOUND", 404, "جلسة التحصيل غير موجودة");
+  return session;
+}
+
+function assertDriverAccess(session: { driverUserId: string }, actorId: string): void {
+  if (session.driverUserId !== actorId) {
+    throw new ApplicationError("COLLECTION_DRIVER_MISMATCH", 403, "جلسة التحصيل تخص سائقاً آخر");
+  }
+}
+
+export async function openCollection(
+  db: Database,
+  input: z.infer<typeof openCollectionInputSchema>,
+  context: { actorId: string }
+) {
+  if (input.driverUserId !== context.actorId) {
+    throw new ApplicationError("COLLECTION_DRIVER_MISMATCH", 403, "يمكن للسائق فتح جلسة التحصيل الخاصة به فقط");
+  }
+
+  const existing = await db.select().from(driverCollectionSessions)
+    .where(and(
+      eq(driverCollectionSessions.driverUserId, input.driverUserId),
+      eq(driverCollectionSessions.status, "open")
+    )).limit(1);
+  if (existing[0]) throw new ApplicationError("COLLECTION_ALREADY_OPEN", 409, "لديك جلسة تحصيل مفتوحة بالفعل");
+
+  const [session] = await db.insert(driverCollectionSessions).values({
+    id: randomUUID(),
+    driverUserId: input.driverUserId,
+    status: "open",
+    openedBy: context.actorId,
+    notes: input.notes?.trim() || null
+  }).returning();
+
+  if (!session) throw new ApplicationError("COLLECTION_CREATE_FAILED", 500, "تعذر فتح جلسة التحصيل");
+  return session;
+}
+
+export async function getCollection(db: Database, sessionId: string, actorId: string) {
+  const session = await getSession(db, sessionId);
+  assertDriverAccess(session, actorId);
+
+  const linked = await db.select({
+    id: driverCollectionPayments.id,
+    paymentId: driverCollectionPayments.paymentId,
+    addedAt: driverCollectionPayments.addedAt,
+    paymentNumber: payments.paymentNumber,
+    status: payments.status,
+    amount: payments.amount,
+    currencyCode: payments.currencyCode,
+    method: payments.method,
+    receivedAt: payments.receivedAt
+  })
+    .from(driverCollectionPayments)
+    .innerJoin(payments, eq(payments.id, driverCollectionPayments.paymentId))
+    .where(eq(driverCollectionPayments.sessionId, sessionId))
+    .orderBy(asc(driverCollectionPayments.addedAt));
+
+  const settlement = await db.select().from(driverCollectionSettlementCounts)
+    .where(eq(driverCollectionSettlementCounts.sessionId, sessionId))
+    .orderBy(asc(driverCollectionSettlementCounts.createdAt));
+
+  return { session, payments: linked, settlement };
+}
+
+export async function addCollectionPayment(
+  db: Database,
+  sessionId: string,
+  input: z.infer<typeof addCollectionPaymentInputSchema>,
+  context: { actorId: string; requestId: string; idempotencyKey: string }
+) {
+  const session = await getSession(db, sessionId);
+  assertDriverAccess(session, context.actorId);
+  if (session.status !== "open") {
+    throw new ApplicationError("COLLECTION_CLOSED", 409, "جلسة التحصيل مغلقة");
+  }
+
+  const created = await createPayment(db, input, context);
+
+  const [linked] = await db.insert(driverCollectionPayments).values({
+    id: randomUUID(),
+    sessionId,
+    paymentId: created.payment.id,
+    addedBy: context.actorId
+  }).returning();
+
+  if (!linked) throw new ApplicationError("COLLECTION_PAYMENT_LINK_FAILED", 500, "تعذر ربط الدفعة بجلسة التحصيل");
+  return { ...created, collectionPayment: linked };
+}
+
+export async function closeCollection(
+  db: Database,
+  sessionId: string,
+  input: z.infer<typeof closeCollectionInputSchema>,
+  context: { actorId: string }
+) {
+  const rows = await db.execute(
+    'SELECT id, driver_user_id, status FROM driver_collection_sessions WHERE id = $1::uuid FOR UPDATE',
+    [sessionId]
+  );
+  const session = rows.rows[0] as { id: string; driver_user_id: string; status: string } | undefined;
+  if (!session) throw new ApplicationError("COLLECTION_NOT_FOUND", 404, "جلسة التحصيل غير موجودة");
+  if (session.driver_user_id !== context.actorId) {
+    throw new ApplicationError("COLLECTION_DRIVER_MISMATCH", 403, "جلسة التحصيل تخص سائقاً آخر");
+  }
+  if (session.status !== "open") throw new ApplicationError("COLLECTION_CLOSED", 409, "جلسة التحصيل مغلقة");
+
+  const duplicateKeys = new Set<string>();
+  for (const count of input.counts) {
+    const key = count.currencyCode + ":" + count.method;
+    if (duplicateKeys.has(key)) {
+      throw new ApplicationError("COLLECTION_DUPLICATE_COUNT", 400, "يوجد تكرار في عملة/طريقة التسوية");
+    }
+    duplicateKeys.add(key);
+  }
+
+  const expectedRows = await db.execute(
+    "SELECT currency_code, method, COALESCE(SUM(amount), 0)::text AS expected_amount FROM payments p JOIN driver_collection_payments dcp ON dcp.payment_id = p.id WHERE dcp.session_id = $1::uuid AND p.status = 'recorded' GROUP BY currency_code, method ORDER BY currency_code, method",
+    [sessionId]
+  );
+
+  const expected = new Map<string, string>();
+  for (const row of expectedRows.rows as Array<{ currency_code: string; method: string; expected_amount: string }>) {
+    expected.set(row.currency_code + ":" + row.method, row.expected_amount);
+  }
+
+  const keys = new Set([...expected.keys(), ...input.counts.map((c) => c.currencyCode + ":" + c.method)]);
+
+  for (const key of keys) {
+    const separator = key.indexOf(":");
+    const currencyCode = key.slice(0, separator);
+    const method = key.slice(separator + 1) as "cash" | "sham_cash";
+    const expectedAmount = new Decimal(expected.get(key) ?? "0");
+    const count = input.counts.find((item) => item.currencyCode === currencyCode && item.method === method);
+    const countedAmount = new Decimal(count?.countedAmount ?? "0");
+    const difference = countedAmount.sub(expectedAmount);
+
+    await db.insert(driverCollectionSettlementCounts).values({
+      id: randomUUID(),
+      sessionId,
+      currencyCode,
+      method,
+      expectedAmount: expectedAmount.toFixed(),
+      countedAmount: countedAmount.toFixed(),
+      differenceAmount: difference.toFixed()
+    });
+  }
+
+  const now = new Date();
+  await db.update(driverCollectionSessions)
+    .set({ status: "closed", closedAt: now, closedBy: context.actorId, notes: input.notes?.trim() || null, updatedAt: now })
+    .where(eq(driverCollectionSessions.id, sessionId));
+
+  return getCollection(db, sessionId, context.actorId);
+}
