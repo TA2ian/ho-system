@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { eq, and } from "drizzle-orm";
+import { eq, and, lte } from "drizzle-orm";
 import type { Database } from "../db/client.js";
 import { idempotencyKeys } from "../db/schema.js";
 
@@ -31,6 +31,12 @@ export async function beginIdempotency(
 ): Promise<IdempotencyResult> {
   const id = randomUUID();
   const expiresAt = new Date(Date.now() + ttlMs);
+
+  await db.delete(idempotencyKeys).where(and(
+    eq(idempotencyKeys.scope, scope),
+    eq(idempotencyKeys.idempotencyKey, key),
+    lte(idempotencyKeys.expiresAt, new Date())
+  ));
 
   await db.insert(idempotencyKeys).values({
     id,
