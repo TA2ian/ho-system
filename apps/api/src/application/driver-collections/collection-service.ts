@@ -10,7 +10,7 @@ import {
   payments
 } from "../../db/payment-schema.js";
 import { ApplicationError } from "../../domain/errors.js";
-import { createPayment, createPaymentInputSchema } from "./payment-service.js";
+import { createPayment, createPaymentInputSchema } from "../payments/payment-service.js";
 
 const decimalInput = z.string()
   .regex(/^\d+(\.\d{1,10})?$/)
@@ -165,7 +165,7 @@ export async function closeCollection(
     const separator = key.indexOf(":");
     const currencyCode = key.slice(0, separator);
     const method = key.slice(separator + 1) as "cash" | "sham_cash";
-    const expectedAmount = new Decimal(expected.get(key) ?? "0");
+    const expectedAmount = new Decimal(String(expected.get(key) ?? "0"));
     const count = input.counts.find((item) => item.currencyCode === currencyCode && item.method === method);
     const countedAmount = new Decimal(count?.countedAmount ?? "0");
     const difference = countedAmount.sub(expectedAmount);
