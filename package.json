@@ -7,7 +7,9 @@
     "dev": "tsx watch apps/api/src/server.ts",
     "build": "tsc -p apps/api/tsconfig.json",
     "start": "node apps/api/dist/server.js",
-    "typecheck": "tsc -p apps/api/tsconfig.json --noEmit"
+    "typecheck": "tsc -p apps/api/tsconfig.json --noEmit",
+    "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
+    "db:migrate": "drizzle-kit migrate --config=drizzle.config.ts"
   },
   "engines": {
     "node": ">=22"
@@ -15,11 +17,16 @@
   "dependencies": {
     "@fastify/cors": "^10.0.2",
     "@fastify/helmet": "^13.0.1",
+    "decimal.js": "^10.6.0",
+    "drizzle-orm": "^0.44.2",
     "fastify": "^5.4.0",
+    "pg": "^8.16.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",
+    "@types/pg": "^8.15.4",
+    "drizzle-kit": "^0.31.1",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }
