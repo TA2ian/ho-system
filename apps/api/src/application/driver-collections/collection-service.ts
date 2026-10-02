@@ -10,7 +10,7 @@ import {
   payments
 } from "../../db/payment-schema.js";
 import { ApplicationError } from "../../domain/errors.js";
-import { createPayment, createPaymentInputSchema } from "../payments/payment-service.js";
+import { recordDeliveryCollection, deliveryCollectionInputSchema } from "../delivery/delivery-service.js";
 
 const decimalInput = z.string()
   .regex(/^\d+(\.\d{1,10})?$/)
@@ -23,7 +23,7 @@ export const openCollectionInputSchema = z.object({
   notes: z.string().trim().max(2000).nullable().optional()
 });
 
-export const addCollectionPaymentInputSchema = createPaymentInputSchema;
+export const addCollectionPaymentInputSchema = deliveryCollectionInputSchema;
 
 export const closeCollectionInputSchema = z.object({
   counts: z.array(z.object({
@@ -116,7 +116,7 @@ export async function addCollectionPayment(
     throw new ApplicationError("COLLECTION_CLOSED", 409, "جلسة التحصيل مغلقة");
   }
 
-  const created = await createPayment(db, input, context);
+  const created = await recordDeliveryCollection(db, input.deliveryOrderId, sessionId, input, context);
 
   const [linked] = await db.insert(driverCollectionPayments).values({
     id: randomUUID(),

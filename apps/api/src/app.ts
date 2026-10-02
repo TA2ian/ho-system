@@ -18,6 +18,7 @@ import { createInvoiceFromSalesOrder, createInvoiceInputSchema, getInvoice, issu
 import { allocatePayment, allocatePaymentInputSchema, createPayment, createPaymentInputSchema, getPayment, reversePayment, reversePaymentInputSchema } from "./application/payments/payment-service.js";
 import { addCollectionPayment, addCollectionPaymentInputSchema, closeCollection, closeCollectionInputSchema, getCollection, openCollection, openCollectionInputSchema } from "./application/driver-collections/collection-service.js";
 import { getInvoiceReceivable, listCustomerReceivables } from "./application/receivables/receivable-service.js";
+import { assignDeliveryOrder, assignDeliveryOrderInputSchema, createDeliveryOrder, createDeliveryOrderInputSchema, getDeliveryOrder, listDeliveryOrders, transitionDeliveryOrder, transitionDeliveryOrderInputSchema } from "./application/delivery/delivery-service.js";
 
 export function buildApp(dependencies: {
   db: Database;
@@ -546,6 +547,92 @@ export function buildApp(dependencies: {
         actorId: request.principal!.userId, requestId: request.id, idempotencyKey: key
       });
       const body = { data: reversed };
+      await completeIdempotency(tx, idem.id, 200, body);
+      return { kind: "new" as const, status: 200, body };
+    });
+    return reply.status(result.status).send(result.body);
+  });
+
+
+  app.get("/api/v1/delivery-orders", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "delivery.read");
+    const query = request.query as { driverUserId?: string; status?: string };
+    const privileged = request.principal.permissions.has("delivery.manage");
+    return reply.send({ data: await listDeliveryOrders(dependencies.db, request.principal.userId, privileged, { driverUserId: query.driverUserId, status: query.status }) });
+  });
+
+  app.get<{ Params: { id: string } }>("/api/v1/delivery-orders/:id", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "delivery.read");
+    if (!/^[0-9a-fA-F-]{36}$/.test(request.params.id)) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "معرّف طلب التوصيل غير صالح" });
+    const privileged = request.principal.permissions.has("delivery.manage");
+    return reply.send({ data: await getDeliveryOrder(dependencies.db, request.params.id, request.principal.userId, privileged) });
+  });
+
+  app.post("/api/v1/delivery-orders", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "delivery.manage");
+    const parsed = createDeliveryOrderInputSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "بيانات طلب التوصيل غير صالحة", issues: parsed.error.flatten() });
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (typeof idempotencyKey !== "string" || idempotencyKey.trim().length < 16 || idempotencyKey.length > 255) return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
+    const key = idempotencyKey.trim();
+    const scope = `delivery:create:${request.principal.userId}`;
+    const requestHash = hashRequestBody(parsed.data);
+    const result = await withTransaction(dependencies.pool, async (tx) => {
+      const idem = await beginIdempotency(tx, scope, key, requestHash);
+      if (idem.kind === "replay") return idem;
+      if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
+      const created = await createDeliveryOrder(tx, parsed.data, { actorId: request.principal!.userId, requestId: request.id, idempotencyKey: key });
+      const body = { data: created };
+      await completeIdempotency(tx, idem.id, 201, body);
+      return { kind: "new" as const, status: 201, body };
+    });
+    return reply.status(result.status).send(result.body);
+  });
+
+  app.post<{ Params: { id: string } }>("/api/v1/delivery-orders/:id/assign", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "delivery.assign");
+    if (!/^[0-9a-fA-F-]{36}$/.test(request.params.id)) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "معرّف طلب التوصيل غير صالح" });
+    const parsed = assignDeliveryOrderInputSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "بيانات إسناد السائق غير صالحة", issues: parsed.error.flatten() });
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (typeof idempotencyKey !== "string" || idempotencyKey.trim().length < 16 || idempotencyKey.length > 255) return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
+    const key = idempotencyKey.trim();
+    const scope = `delivery:assign:${request.params.id}:${request.principal.userId}`;
+    const requestHash = hashRequestBody(parsed.data);
+    const result = await withTransaction(dependencies.pool, async (tx) => {
+      const idem = await beginIdempotency(tx, scope, key, requestHash);
+      if (idem.kind === "replay") return idem;
+      if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
+      const updated = await assignDeliveryOrder(tx, request.params.id, parsed.data, { actorId: request.principal!.userId, requestId: request.id, idempotencyKey: key });
+      const body = { data: updated };
+      await completeIdempotency(tx, idem.id, 200, body);
+      return { kind: "new" as const, status: 200, body };
+    });
+    return reply.status(result.status).send(result.body);
+  });
+
+  app.post<{ Params: { id: string } }>("/api/v1/delivery-orders/:id/status", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "delivery.status");
+    if (!/^[0-9a-fA-F-]{36}$/.test(request.params.id)) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "معرّف طلب التوصيل غير صالح" });
+    const parsed = transitionDeliveryOrderInputSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "حالة طلب التوصيل غير صالحة", issues: parsed.error.flatten() });
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (typeof idempotencyKey !== "string" || idempotencyKey.trim().length < 16 || idempotencyKey.length > 255) return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
+    const key = idempotencyKey.trim();
+    const scope = `delivery:status:${request.params.id}:${request.principal.userId}`;
+    const requestHash = hashRequestBody(parsed.data);
+    const privileged = request.principal.permissions.has("delivery.manage");
+    const result = await withTransaction(dependencies.pool, async (tx) => {
+      const idem = await beginIdempotency(tx, scope, key, requestHash);
+      if (idem.kind === "replay") return idem;
+      if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
+      const updated = await transitionDeliveryOrder(tx, request.params.id, parsed.data, { actorId: request.principal!.userId, requestId: request.id, idempotencyKey: key }, privileged);
+      const body = { data: updated };
       await completeIdempotency(tx, idem.id, 200, body);
       return { kind: "new" as const, status: 200, body };
     });
