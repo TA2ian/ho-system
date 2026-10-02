@@ -3,7 +3,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "../../db/client.js";
 import { deliveryOrderPayments, deliveryOrders } from "../../db/delivery-schema.js";
-import { driverCollectionPayments } from "../../db/driver-collection-schema.js";
+import { driverCollectionPayments } from "../../db/payment-schema.js";
 import { roles, userRoles, users } from "../../db/schema.js";
 import { ApplicationError } from "../../domain/errors.js";
 import { deliveryStatusSchema, deliveryTypeSchema } from "../../domain/delivery.js";
