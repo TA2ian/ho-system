@@ -5,8 +5,9 @@ import * as schema from "./schema.js";
 import { customers } from "./customer-schema.js";
 import * as catalogSchema from "./catalog-schema.js";
 import * as salesSchema from "./sales-schema.js";
+import * as invoiceSchema from "./invoice-schema.js";
 
-export const allSchema = { ...schema, customers, ...catalogSchema, ...salesSchema };
+export const allSchema = { ...schema, customers, ...catalogSchema, ...salesSchema, ...invoiceSchema };
 
 export type Database = NodePgDatabase<typeof allSchema>;
 
