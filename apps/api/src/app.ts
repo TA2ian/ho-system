@@ -13,6 +13,7 @@ import type { AuthenticationAdapter } from "./identity/auth.js";
 import { authenticateRequest } from "./identity/middleware.js";
 import { ApplicationError } from "./domain/errors.js";
 import { createCatalogItem, createCatalogItemInputSchema, listCatalogCategories, listCatalogItems } from "./application/catalog/catalog-service.js";
+import { createSalesOrder, createSalesOrderInputSchema } from "./application/sales-orders/sales-order-service.js";
 
 export function buildApp(dependencies: {
   db: Database;
@@ -186,6 +187,67 @@ export function buildApp(dependencies: {
       });
 
       const body = { data: item };
+      await completeIdempotency(tx, idem.id, 201, body);
+      return { kind: "new" as const, status: 201, body };
+    });
+
+    return reply.status(result.status).send(result.body);
+  });
+
+  app.post("/api/v1/sales-orders", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({
+      error: "UNAUTHORIZED",
+      message: "المصادقة مطلوبة"
+    });
+
+    assertPermission(request.principal, "sales.manage");
+
+    const parsed = createSalesOrderInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: "VALIDATION_ERROR",
+        message: "بيانات طلب البيع غير صالحة",
+        issues: parsed.error.flatten()
+      });
+    }
+
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (
+      typeof idempotencyKey !== "string" ||
+      idempotencyKey.trim().length < 16 ||
+      idempotencyKey.length > 255
+    ) {
+      return reply.status(400).send({
+        error: "IDEMPOTENCY_KEY_REQUIRED",
+        message: "يجب إرسال مفتاح Idempotency-Key صالح"
+      });
+    }
+
+    const key = idempotencyKey.trim();
+    const scope = `sales-order:create:${request.principal.userId}`;
+    const requestHash = hashRequestBody(parsed.data);
+
+    const result = await withTransaction(dependencies.pool, async (tx) => {
+      const idem = await beginIdempotency(tx, scope, key, requestHash);
+      if (idem.kind === "replay") return idem;
+
+      if (idem.kind === "conflict") {
+        throw new ApplicationError(
+          idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS",
+          409,
+          idem.reason === "KEY_REUSED"
+            ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة"
+            : "الطلب نفسه قيد المعالجة"
+        );
+      }
+
+      const created = await createSalesOrder(tx, parsed.data, {
+        actorId: request.principal!.userId,
+        requestId: request.id,
+        idempotencyKey: key
+      });
+
+      const body = { data: created };
       await completeIdempotency(tx, idem.id, 201, body);
       return { kind: "new" as const, status: 201, body };
     });
