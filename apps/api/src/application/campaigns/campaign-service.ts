@@ -9,6 +9,7 @@ import { invoices } from "../../db/invoice-schema.js";
 import { roles, userRoles, users } from "../../db/schema.js";
 import { ApplicationError } from "../../domain/errors.js";
 import { recordAuditEvent } from "../audit.js";
+import { postCampaignSpendRecorded } from "../accounting/accounting-posting-service.js";
 
 const uuidSchema = z.string().uuid();
 const amount = z.string().regex(/^\d+(\.\d{1,10})?$/).refine(v => new Decimal(v).gte(0), "المبلغ يجب ألا يكون سالباً");
@@ -135,6 +136,7 @@ export async function recordCampaignSpend(db: Database, campaignId: string, inpu
   if (campaign.currencyCode !== input.currencyCode) throw new ApplicationError("CURRENCY_MISMATCH", 409, "عملة الإنفاق يجب أن تطابق عملة الحملة");
   const [entry] = await db.insert(campaignSpendEntries).values({ id: randomUUID(), campaignId, amount: input.amount, currencyCode: input.currencyCode, spentAt: input.spentAt ? new Date(input.spentAt) : new Date(), reference: input.reference?.trim() || null, notes: input.notes?.trim() || null, recordedBy: context.actorId }).returning();
   if (!entry) throw new ApplicationError("CAMPAIGN_SPEND_CREATE_FAILED", 500, "تعذر تسجيل الإنفاق");
+  await postCampaignSpendRecorded(db, entry.id, context);
   await recordAuditEvent(db, { actorId: context.actorId, action: "campaign.spend_recorded", resourceType: "campaign", resourceId: campaignId, requestId: context.requestId, idempotencyKey: context.idempotencyKey, metadata: { amount: input.amount, currencyCode: input.currencyCode, spendId: entry.id } });
   return getCampaign(db, campaignId, context.actorId, privileged);
 }
