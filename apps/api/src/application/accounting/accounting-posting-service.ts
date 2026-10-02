@@ -137,6 +137,47 @@ export async function reversePaymentRecorded(
 }
 
 
+
+export async function postExpenseRecorded(
+  db: Database,
+  expenseId: string,
+  context: { actorId: string; requestId: string; idempotencyKey: string }
+): Promise<string> {
+  const rows = await db.execute(sql`
+    SELECT id, amount, currency_code, payment_method, incurred_at
+    FROM expenses WHERE id = ${expenseId}::uuid FOR UPDATE
+  `);
+  const expense = rows.rows[0] as {
+    id: string; amount: string; currency_code: string; payment_method: string; incurred_at: Date;
+  } | undefined;
+  if (!expense) throw new Error("Expense not found");
+  const creditCode = expense.payment_method === "cash" ? "1000"
+    : expense.payment_method === "sham_cash" ? "1010" : "2000";
+  const accounts = await accountIds(db, ["5300", creditCode]);
+  const rate = await resolveRateToBase(db, expense.currency_code, "USD");
+  return postOperationalJournal(db, {
+    entryDate: expense.incurred_at.toISOString().slice(0, 10),
+    currencyCode: expense.currency_code,
+    exchangeRateToBase: rate,
+    description: "Expense " + expenseId,
+    sourceType: "expense",
+    sourceId: expenseId,
+    sourceEventKey: "expense:" + expenseId + ":recorded",
+    lines: [
+      { accountId: accounts.get("5300")!, debitAmount: expense.amount, description: "Operating expense", customerId: null },
+      { accountId: accounts.get(creditCode)!, creditAmount: expense.amount, description: expense.payment_method === "unpaid" ? "Accounts payable" : "Cash payment", customerId: "" }
+    ]
+  }, context);
+}
+
+export async function postExpenseVoided(
+  db: Database,
+  expenseId: string,
+  context: { actorId: string; requestId: string; idempotencyKey: string }
+): Promise<string> {
+  return reverseSourceJournal(db, "expense:" + expenseId + ":recorded", context);
+}
+
 export async function postInvoiceVoided(
   db: Database,
   invoiceId: string,
