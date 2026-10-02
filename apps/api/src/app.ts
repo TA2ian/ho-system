@@ -559,7 +559,10 @@ export function buildApp(dependencies: {
     assertPermission(request.principal, "delivery.read");
     const query = request.query as { driverUserId?: string; status?: string };
     const privileged = request.principal.permissions.has("delivery.manage");
-    return reply.send({ data: await listDeliveryOrders(dependencies.db, request.principal.userId, privileged, { driverUserId: query.driverUserId, status: query.status }) });
+    const filters: { driverUserId?: string; status?: string } = {};
+    if (query.driverUserId !== undefined) filters.driverUserId = query.driverUserId;
+    if (query.status !== undefined) filters.status = query.status;
+    return reply.send({ data: await listDeliveryOrders(dependencies.db, request.principal.userId, privileged, filters) });
   });
 
   app.get<{ Params: { id: string } }>("/api/v1/delivery-orders/:id", async (request, reply) => {
