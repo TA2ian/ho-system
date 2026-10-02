@@ -14,7 +14,7 @@ function checksum(sql: string): string {
   return createHash("sha256").update(sql).digest("hex");
 }
 
-async function runMigrations(pool: Pool): Promise<void> {
+export async function runMigrations(pool: Pool): Promise<void> {
   const client = await pool.connect();
 
   try {
@@ -65,10 +65,15 @@ async function runMigrations(pool: Pool): Promise<void> {
   }
 }
 
-const { pool } = createDatabase();
+export async function migrateDatabase(): Promise<void> {
+  const { pool } = createDatabase();
+  try {
+    await runMigrations(pool);
+  } finally {
+    await closeDatabase(pool);
+  }
+}
 
-try {
-  await runMigrations(pool);
-} finally {
-  await closeDatabase(pool);
+if (import.meta.url === `file://${process.argv[1]}`) {
+  await migrateDatabase();
 }
