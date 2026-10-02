@@ -2,7 +2,8 @@ import { eq, sql } from "drizzle-orm";
 import { Decimal } from "decimal.js";
 import type { Database } from "../../db/client.js";
 import { invoices } from "../../db/invoice-schema.js";
-import { createJournal, postJournal } from "./accounting-service.js";
+import { paymentAllocations, payments } from "../../db/payment-schema.js";
+import { createJournal, postJournal, reverseJournal } from "./accounting-service.js";
 import { resolveRateToBase } from "../exchange/exchange-service.js";
 
 type PostingLine = { accountId: string; debitAmount?: string; creditAmount?: string; description: string; customerId: string };
@@ -13,6 +14,126 @@ async function accountIds(db:Database,codes:string[]){
   for(const row of result.rows as Array<{code:string;id:string}>)map.set(row.code,row.id);
   for(const code of codes)if(!map.has(code))throw new Error("Missing chart account "+code);
   return map;
+}
+
+
+async function postOperationalJournal(
+  db: Database,
+  input: {
+    entryDate: string;
+    currencyCode: string;
+    exchangeRateToBase: string;
+    description: string;
+    sourceType: string;
+    sourceId: string;
+    sourceEventKey: string;
+    lines: PostingLine[];
+  },
+  context: { actorId: string; requestId: string; idempotencyKey: string }
+): Promise<string> {
+  const existing = await db.execute(sql`SELECT id FROM journal_entries WHERE source_event_key = ${input.sourceEventKey} LIMIT 1`);
+  const existingId = (existing.rows[0] as { id?: string } | undefined)?.id;
+  if (existingId) return existingId;
+  const created = await createJournal(db, input, context);
+  const posted = await postJournal(db, created.entry.id, context);
+  return posted.entry.id;
+}
+
+async function reverseSourceJournal(
+  db: Database,
+  sourceEventKey: string,
+  context: { actorId: string; requestId: string; idempotencyKey: string }
+): Promise<string> {
+  const rows = await db.execute(sql`SELECT id, status FROM journal_entries WHERE source_event_key = ${sourceEventKey} LIMIT 1 FOR UPDATE`);
+  const entry = rows.rows[0] as { id: string; status: string } | undefined;
+  if (!entry) throw new Error("Missing accounting journal for " + sourceEventKey);
+  if (entry.status !== "posted") throw new Error("Accounting journal is not posted for " + sourceEventKey);
+  const existingReversal = await db.execute(sql`SELECT id FROM journal_entries WHERE reverses_entry_id = ${entry.id}::uuid LIMIT 1`);
+  if (existingReversal.rows[0]) return String((existingReversal.rows[0] as { id: string }).id);
+  return (await reverseJournal(db, entry.id, {
+    entryDate: new Date().toISOString().slice(0, 10),
+    reason: "Operational reversal",
+  }, context)).entry.id;
+}
+
+export async function postPaymentRecorded(
+  db: Database,
+  paymentId: string,
+  context: { actorId: string; requestId: string; idempotencyKey: string }
+): Promise<string> {
+  const rows = await db.execute(sql`
+    SELECT id, customer_id, amount, currency_code, method, received_at
+    FROM payments WHERE id = ${paymentId}::uuid FOR UPDATE
+  `);
+  const payment = rows.rows[0] as {
+    id: string; customer_id: string; amount: string; currency_code: string; method: string; received_at: Date;
+  } | undefined;
+  if (!payment) throw new Error("Payment not found");
+  const cashCode = payment.method === "sham_cash" ? "1010" : "1000";
+  const accounts = await accountIds(db, [cashCode, "2300"]);
+  const rate = await resolveRateToBase(db, payment.currency_code, "USD");
+  return postOperationalJournal(db, {
+    entryDate: payment.received_at.toISOString().slice(0, 10),
+    currencyCode: payment.currency_code,
+    exchangeRateToBase: rate,
+    description: "Customer payment " + paymentId,
+    sourceType: "payment",
+    sourceId: paymentId,
+    sourceEventKey: "payment:" + paymentId + ":recorded",
+    lines: [
+      { accountId: accounts.get(cashCode)!, debitAmount: payment.amount, description: "Cash receipt", customerId: payment.customer_id },
+      { accountId: accounts.get("2300")!, creditAmount: payment.amount, description: "Unapplied customer receipt", customerId: payment.customer_id }
+    ]
+  }, context);
+}
+
+export async function postPaymentAllocated(
+  db: Database,
+  allocationId: string,
+  context: { actorId: string; requestId: string; idempotencyKey: string }
+): Promise<string> {
+  const rows = await db.execute(sql`
+    SELECT pa.id, pa.payment_id, pa.invoice_id, pa.amount, pa.currency_code, p.customer_id, p.received_at
+    FROM payment_allocations pa
+    JOIN payments p ON p.id = pa.payment_id
+    WHERE pa.id = ${allocationId}::uuid
+    FOR UPDATE
+  `);
+  const allocation = rows.rows[0] as {
+    id: string; payment_id: string; invoice_id: string; amount: string; currency_code: string; customer_id: string; received_at: Date;
+  } | undefined;
+  if (!allocation) throw new Error("Payment allocation not found");
+  const accounts = await accountIds(db, ["1100", "2300"]);
+  const rate = await resolveRateToBase(db, allocation.currency_code, "USD");
+  return postOperationalJournal(db, {
+    entryDate: allocation.received_at.toISOString().slice(0, 10),
+    currencyCode: allocation.currency_code,
+    exchangeRateToBase: rate,
+    description: "Allocate payment " + allocation.id,
+    sourceType: "payment_allocation",
+    sourceId: allocation.id,
+    sourceEventKey: "payment-allocation:" + allocation.id + ":allocated",
+    lines: [
+      { accountId: accounts.get("2300")!, debitAmount: allocation.amount, description: "Apply customer receipt", customerId: allocation.customer_id },
+      { accountId: accounts.get("1100")!, creditAmount: allocation.amount, description: "Reduce accounts receivable", customerId: allocation.customer_id }
+    ]
+  }, context);
+}
+
+export async function reversePaymentAllocation(
+  db: Database,
+  allocationId: string,
+  context: { actorId: string; requestId: string; idempotencyKey: string }
+): Promise<string> {
+  return reverseSourceJournal(db, "payment-allocation:" + allocationId + ":allocated", context);
+}
+
+export async function reversePaymentRecorded(
+  db: Database,
+  paymentId: string,
+  context: { actorId: string; requestId: string; idempotencyKey: string }
+): Promise<string> {
+  return reverseSourceJournal(db, "payment:" + paymentId + ":recorded", context);
 }
 
 export async function postInvoiceIssued(db:Database,invoiceId:string,context:{actorId:string;requestId:string;idempotencyKey:string}){
