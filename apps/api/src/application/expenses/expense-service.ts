@@ -6,6 +6,7 @@ import type { Database } from "../../db/client.js";
 import { expenses } from "../../db/expense-schema.js";
 import { ApplicationError } from "../../domain/errors.js";
 import { recordAuditEvent } from "../audit.js";
+import { postExpenseRecorded, postExpenseVoided } from "../accounting/accounting-posting-service.js";
 
 const amount=z.string().regex(/^\d+(\.\d{1,10})?$/).refine(v=>new Decimal(v).gt(0),"المبلغ يجب أن يكون أكبر من صفر");
 export const createExpenseInputSchema=z.object({
@@ -26,6 +27,7 @@ export async function createExpense(db:Database,input:z.infer<typeof createExpen
   const paid=input.paymentMethod==="unpaid"?null:now;
   const [row]=await db.insert(expenses).values({id:randomUUID(),expenseNumber:"EXP-"+new Date().toISOString().slice(0,10).replaceAll("-","")+"-"+randomUUID().slice(0,8).toUpperCase(),category:input.category.trim(),vendorName:input.vendorName?.trim()||null,description:input.description.trim(),amount:input.amount,currencyCode:input.currencyCode,paymentMethod:input.paymentMethod,status:"recorded",incurredAt:now,paidAt:paid,paidBy:paid?context.actorId:null,reference:input.reference?.trim()||null,notes:input.notes?.trim()||null,createdBy:context.actorId}).returning();
   if(!row)throw new ApplicationError("EXPENSE_CREATE_FAILED",500,"تعذر تسجيل المصروف");
+  await postExpenseRecorded(db, row.id, context);
   await recordAuditEvent(db,{actorId:context.actorId,action:"expense.recorded",resourceType:"expense",resourceId:row.id,requestId:context.requestId,idempotencyKey:context.idempotencyKey,metadata:{amount:input.amount,currencyCode:input.currencyCode,paymentMethod:input.paymentMethod,category:input.category}});
   return row;
 }
@@ -36,6 +38,7 @@ export async function voidExpense(db:Database,expenseId:string,input:z.infer<typ
   if(row.status!=="recorded")throw new ApplicationError("EXPENSE_ALREADY_VOIDED",409,"المصروف ليس مسجلاً");
   const now=new Date();const [updated]=await db.update(expenses).set({status:"voided",voidedAt:now,updatedAt:now}).where(and(eq(expenses.id,expenseId),eq(expenses.status,"recorded"))).returning();
   if(!updated)throw new ApplicationError("EXPENSE_UPDATE_FAILED",500,"تعذر إلغاء المصروف");
+  try { await postExpenseVoided(db, expenseId, context); } catch (error) { throw new ApplicationError("EXPENSE_REVERSAL_FAILED",409,error instanceof Error ? error.message : "تعذر عكس القيد المحاسبي للمصروف"); }
   await recordAuditEvent(db,{actorId:context.actorId,action:"expense.voided",resourceType:"expense",resourceId:expenseId,requestId:context.requestId,idempotencyKey:context.idempotencyKey,metadata:{reason:input.reason}});
   return updated;
 }
