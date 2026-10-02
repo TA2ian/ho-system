@@ -53,8 +53,7 @@ WITH role_permission_codes(role_code, permission_code) AS (
     ('accountant', 'invoices.manage'),
     ('sales', 'invoices.read'),
     ('sales', 'invoices.manage'),
-    ('operations', 'invoices.read'),
-    ('reports', 'invoices.read')
+    ('operations', 'invoices.read')
 )
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
