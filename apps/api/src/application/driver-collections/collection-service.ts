@@ -108,11 +108,8 @@ export async function addCollectionPayment(
   input: z.infer<typeof addCollectionPaymentInputSchema>,
   context: { actorId: string; requestId: string; idempotencyKey: string }
 ) {
-  const rows = await db.execute(sql`SELECT id, driver_user_id, status, opened_at, opened_by, closed_at, closed_by, notes, created_at, updated_at FROM driver_collection_sessions WHERE id = ${sessionId}::uuid FOR UPDATE`);
-  const session = rows.rows[0] as {
-    id: string; driver_user_id: string; status: string; opened_at: Date; opened_by: string;
-    closed_at: Date | null; closed_by: string | null; notes: string | null; created_at: Date; updated_at: Date;
-  } | undefined;
+  const rows = await db.execute(sql<{ id: string; driver_user_id: string; status: string; opened_at: Date; opened_by: string; closed_at: Date | null; closed_by: string | null; notes: string | null; created_at: Date; updated_at: Date }>`SELECT id, driver_user_id, status, opened_at, opened_by, closed_at, closed_by, notes, created_at, updated_at FROM driver_collection_sessions WHERE id = ${sessionId}::uuid FOR UPDATE`);
+  const session = rows.rows[0];
   if (!session) throw new ApplicationError("COLLECTION_NOT_FOUND", 404, "جلسة التحصيل غير موجودة");
   if (session.driver_user_id !== context.actorId) throw new ApplicationError("COLLECTION_DRIVER_MISMATCH", 403, "جلسة التحصيل تخص سائقاً آخر");
   if (session.status !== "open") {
@@ -138,8 +135,8 @@ export async function closeCollection(
   input: z.infer<typeof closeCollectionInputSchema>,
   context: { actorId: string }
 ) {
-  const rows = await db.execute(sql`SELECT id, driver_user_id, status FROM driver_collection_sessions WHERE id = ${sessionId}::uuid FOR UPDATE`);
-  const session = rows.rows[0] as { id: string; driver_user_id: string; status: string } | undefined;
+  const rows = await db.execute(sql<{ id: string; driver_user_id: string; status: string }>`SELECT id, driver_user_id, status FROM driver_collection_sessions WHERE id = ${sessionId}::uuid FOR UPDATE`);
+  const session = rows.rows[0];
   if (!session) throw new ApplicationError("COLLECTION_NOT_FOUND", 404, "جلسة التحصيل غير موجودة");
   if (session.driver_user_id !== context.actorId) {
     throw new ApplicationError("COLLECTION_DRIVER_MISMATCH", 403, "جلسة التحصيل تخص سائقاً آخر");
@@ -155,10 +152,10 @@ export async function closeCollection(
     duplicateKeys.add(key);
   }
 
-  const expectedRows = await db.execute(sql`SELECT currency_code, method, COALESCE(SUM(amount), 0)::text AS expected_amount FROM payments p JOIN driver_collection_payments dcp ON dcp.payment_id = p.id WHERE dcp.session_id = ${sessionId}::uuid AND p.status = 'recorded' GROUP BY currency_code, method ORDER BY currency_code, method`);
+  const expectedRows = await db.execute(sql<{ currency_code: string; method: string; expected_amount: string }>`SELECT currency_code, method, COALESCE(SUM(amount), 0)::text AS expected_amount FROM payments p JOIN driver_collection_payments dcp ON dcp.payment_id = p.id WHERE dcp.session_id = ${sessionId}::uuid AND p.status = 'recorded' GROUP BY currency_code, method ORDER BY currency_code, method`);
 
   const expected = new Map<string, string>();
-  for (const row of expectedRows.rows as Array<{ currency_code: string; method: string; expected_amount: string }>) {
+  for (const row of expectedRows.rows) {
     expected.set(row.currency_code + ":" + row.method, row.expected_amount);
   }
 
