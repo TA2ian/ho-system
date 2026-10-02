@@ -39,15 +39,3 @@ export function assertPermission(
   }
 }
 
-export function assertScopedPermission(
-  principal: AuthenticatedPrincipal,
-  permission: string,
-  scopeType: string,
-  scopeId: string
-): void {
-  assertPermission(principal, permission);
-
-  if (!hasScope(principal, scopeType, scopeId)) {
-    throw new Error("FORBIDDEN");
-  }
-}
