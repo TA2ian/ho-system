@@ -5,6 +5,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -125,7 +126,7 @@ export const userRoles = pgTable("user_roles", {
   assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull().defaultNow(),
   assignedBy: uuid("assigned_by").references(() => users.id)
 }, (table) => [
-  uniqueIndex("user_roles_uq").on(table.userId, table.roleId),
+  primaryKey({ columns: [table.userId, table.roleId] }),
   index("user_roles_role_idx").on(table.roleId)
 ]);
 
@@ -134,7 +135,7 @@ export const rolePermissions = pgTable("role_permissions", {
   permissionId: uuid("permission_id").notNull().references(() => permissions.id),
   assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull().defaultNow()
 }, (table) => [
-  uniqueIndex("role_permissions_uq").on(table.roleId, table.permissionId),
+  primaryKey({ columns: [table.roleId, table.permissionId] }),
   index("role_permissions_permission_idx").on(table.permissionId)
 ]);
 
@@ -145,6 +146,6 @@ export const userAccessScopes = pgTable("user_access_scopes", {
   grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
   grantedBy: uuid("granted_by").references(() => users.id)
 }, (table) => [
-  uniqueIndex("user_access_scopes_uq").on(table.userId, table.scopeType, table.scopeId),
+  primaryKey({ columns: [table.userId, table.scopeType, table.scopeId] }),
   index("user_access_scopes_scope_idx").on(table.scopeType, table.scopeId)
 ]);
