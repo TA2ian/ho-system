@@ -32,9 +32,18 @@ export async function createCustomer(
   }).returning();
 
   if (!row) throw new Error("CUSTOMER_CREATE_FAILED");
-  return row as Customer;
+  return {
+    ...row,
+    type: row.type as Customer["type"],
+    status: row.status as Customer["status"]
+  };
 }
 
 export async function listCustomers(db: Database): Promise<Customer[]> {
-  return db.select().from(customers).where(eq(customers.status, "active")) as Promise<Customer[]>;
+  const rows = await db.select().from(customers).where(eq(customers.status, "active"));
+  return rows.map((row) => ({
+    ...row,
+    type: row.type as Customer["type"],
+    status: row.status as Customer["status"]
+  }));
 }
