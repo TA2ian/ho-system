@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { Database } from "../../db/client.js";
-import { customers } from "../../db/customer-schema.js";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import type { Database } from "../../db/client.js";
+import { customers } from "../../db/customer-schema.js";
+import { recordAuditEvent } from "../audit.js";
 import type { Customer } from "../../domain/customer.js";
+import { ApplicationError } from "../../domain/errors.js";
 
 export const createCustomerInputSchema = z.object({
   type: z.enum(["individual", "business"]),
@@ -15,9 +17,22 @@ export const createCustomerInputSchema = z.object({
 
 export type CreateCustomerInput = z.infer<typeof createCustomerInputSchema>;
 
+function toCustomer(row: typeof customers.$inferSelect): Customer {
+  return {
+    ...row,
+    type: row.type as Customer["type"],
+    status: row.status as Customer["status"]
+  };
+}
+
 export async function createCustomer(
   db: Database,
-  input: CreateCustomerInput
+  input: CreateCustomerInput,
+  context: {
+    actorId: string;
+    requestId: string;
+    idempotencyKey: string;
+  }
 ): Promise<Customer> {
   const id = randomUUID();
 
@@ -31,19 +46,25 @@ export async function createCustomer(
     status: "active"
   }).returning();
 
-  if (!row) throw new Error("CUSTOMER_CREATE_FAILED");
-  return {
-    ...row,
-    type: row.type as Customer["type"],
-    status: row.status as Customer["status"]
-  };
+  if (!row) throw new ApplicationError(
+    "CUSTOMER_CREATE_FAILED",
+    500,
+    "تعذر إنشاء العميل"
+  );
+
+  await recordAuditEvent(db, {
+    actorId: context.actorId,
+    action: "customer.created",
+    resourceType: "customer",
+    resourceId: id,
+    requestId: context.requestId,
+    idempotencyKey: context.idempotencyKey
+  });
+
+  return toCustomer(row);
 }
 
 export async function listCustomers(db: Database): Promise<Customer[]> {
   const rows = await db.select().from(customers).where(eq(customers.status, "active"));
-  return rows.map((row) => ({
-    ...row,
-    type: row.type as Customer["type"],
-    status: row.status as Customer["status"]
-  }));
+  return rows.map(toCustomer);
 }
