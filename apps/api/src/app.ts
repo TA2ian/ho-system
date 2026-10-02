@@ -1,4 +1,4 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import type { Pool } from "pg";
@@ -263,8 +263,8 @@ export function buildApp(dependencies: {
 
     assertPermission(request.principal, "sales.manage");
 
-    const params = request.params as { id?: string };
-    if (!params.id || !/^[0-9a-fA-F-]{36}$/.test(params.id)) {
+    const params = request.params;
+    if (!/^[0-9a-fA-F-]{36}$/.test(params.id)) {
       return reply.status(400).send({
         error: "VALIDATION_ERROR",
         message: "معرّف طلب البيع غير صالح"
@@ -275,8 +275,8 @@ export function buildApp(dependencies: {
   });
 
   async function handleSalesOrderTransition(
-    request: any,
-    reply: any,
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
     target: "confirmed" | "cancelled"
   ) {
     if (!request.principal) return reply.status(401).send({
