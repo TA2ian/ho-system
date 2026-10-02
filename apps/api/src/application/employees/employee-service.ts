@@ -7,6 +7,7 @@ import { employeeCompensationRules, employeeTasks } from "../../db/employee-sche
 import { roles, userRoles, users } from "../../db/schema.js";
 import { ApplicationError } from "../../domain/errors.js";
 import { recordAuditEvent } from "../audit.js";
+import { postEmployeeCompensation } from "../accounting/accounting-posting-service.js";
 
 const uuid=z.string().uuid();
 const amount=z.string().regex(/^\d+(\.\d{1,10})?$/).refine(v=>new Decimal(v).gte(0),"المبلغ غير صالح");
@@ -88,6 +89,7 @@ export async function completeEmployeeTask(db:Database,taskId:string,context:{ac
   const now=new Date();
   const [updated]=await db.update(employeeTasks).set({status:"completed",completedAt:now,compensationRuleId:rule.id,compensationAmount:compensation.toFixed(),updatedAt:now}).where(eq(employeeTasks.id,taskId)).returning();
   if(!updated)throw new ApplicationError("TASK_UPDATE_FAILED",500,"تعذر إتمام المهمة");
+  await postEmployeeCompensation(db, taskId, context);
   await recordAuditEvent(db,{actorId:context.actorId,action:"employee_task.completed",resourceType:"employee_task",resourceId:taskId,requestId:context.requestId,idempotencyKey:context.idempotencyKey,metadata:{ruleId:rule.id,compensationAmount:compensation.toFixed()}});
   return updated;
 }
