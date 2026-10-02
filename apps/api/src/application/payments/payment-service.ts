@@ -113,11 +113,14 @@ export async function allocatePayment(
 
   const allocatedPaymentRows = await db.execute(sql`
     SELECT (
-      COALESCE(SUM(pa.amount), 0) - COALESCE(SUM(par.amount), 0)
+      COALESCE((SELECT SUM(amount) FROM payment_allocations WHERE payment_id = ${paymentId}::uuid), 0)
+      - COALESCE((
+        SELECT SUM(par.amount)
+        FROM payment_allocation_reversals par
+        JOIN payment_allocations pa ON pa.id = par.payment_allocation_id
+        WHERE pa.payment_id = ${paymentId}::uuid
+      ), 0)
     )::text AS total
-    FROM payment_allocations pa
-    LEFT JOIN payment_allocation_reversals par ON par.payment_allocation_id = pa.id
-    WHERE pa.payment_id = ${paymentId}::uuid
   `);
   const allocatedPayment = new Decimal(String((allocatedPaymentRows.rows[0] as { total?: string }).total ?? "0"));
   const paymentRemaining = new Decimal(payment.amount).sub(allocatedPayment);
@@ -126,11 +129,14 @@ export async function allocatePayment(
 
   const allocatedInvoiceRows = await db.execute(sql`
     SELECT (
-      COALESCE(SUM(pa.amount), 0) - COALESCE(SUM(par.amount), 0)
+      COALESCE((SELECT SUM(amount) FROM payment_allocations WHERE invoice_id = ${input.invoiceId}::uuid), 0)
+      - COALESCE((
+        SELECT SUM(par.amount)
+        FROM payment_allocation_reversals par
+        JOIN payment_allocations pa ON pa.id = par.payment_allocation_id
+        WHERE pa.invoice_id = ${input.invoiceId}::uuid
+      ), 0)
     )::text AS total
-    FROM payment_allocations pa
-    LEFT JOIN payment_allocation_reversals par ON par.payment_allocation_id = pa.id
-    WHERE pa.invoice_id = ${input.invoiceId}::uuid
   `);
   const allocatedInvoice = new Decimal(String((allocatedInvoiceRows.rows[0] as { total?: string }).total ?? "0"));
   const invoiceOutstanding = new Decimal(invoice.total_amount).sub(allocatedInvoice);
