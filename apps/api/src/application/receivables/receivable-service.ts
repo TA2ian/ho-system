@@ -47,18 +47,20 @@ export async function getInvoiceReceivable(db: Database, invoiceId: string) {
       i.total_amount::text AS total_amount,
       i.issue_date::text AS issue_date,
       i.due_date::text AS due_date,
-      COALESCE((
-        SELECT SUM(pa.amount)
-        FROM payment_allocations pa
-        WHERE pa.invoice_id = i.id
-      ), 0)::text
-      -
-      COALESCE((
-        SELECT SUM(par.amount)
-        FROM payment_allocation_reversals par
-        JOIN payment_allocations pa2 ON pa2.id = par.payment_allocation_id
-        WHERE pa2.invoice_id = i.id
-      ), 0)::text AS allocated_amount,
+      (
+        COALESCE((
+          SELECT SUM(pa.amount)
+          FROM payment_allocations pa
+          WHERE pa.invoice_id = i.id
+        ), 0)
+        -
+        COALESCE((
+          SELECT SUM(par.amount)
+          FROM payment_allocation_reversals par
+          JOIN payment_allocations pa2 ON pa2.id = par.payment_allocation_id
+          WHERE pa2.invoice_id = i.id
+        ), 0)
+      )::text AS allocated_amount,
       (
         i.total_amount
         -
