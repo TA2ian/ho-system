@@ -43,3 +43,42 @@ export const paymentAllocations = pgTable("payment_allocations", {
   index("payment_allocations_payment_idx").on(table.paymentId),
   index("payment_allocations_invoice_idx").on(table.invoiceId)
 ]);
+
+export const driverCollectionSessions = pgTable("driver_collection_sessions", {
+  id: uuid("id").primaryKey(),
+  driverUserId: uuid("driver_user_id").notNull().references(() => users.id),
+  status: text("status").notNull(),
+  openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
+  openedBy: uuid("opened_by").notNull().references(() => users.id),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  closedBy: uuid("closed_by").references(() => users.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => [
+  index("driver_collection_driver_idx").on(table.driverUserId),
+  index("driver_collection_status_idx").on(table.status)
+]);
+
+export const driverCollectionPayments = pgTable("driver_collection_payments", {
+  id: uuid("id").primaryKey(),
+  sessionId: uuid("session_id").notNull().references(() => driverCollectionSessions.id),
+  paymentId: uuid("payment_id").notNull().unique().references(() => payments.id),
+  addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+  addedBy: uuid("added_by").notNull().references(() => users.id)
+}, (table) => [
+  index("driver_collection_payments_session_idx").on(table.sessionId)
+]);
+
+export const driverCollectionSettlementCounts = pgTable("driver_collection_settlement_counts", {
+  id: uuid("id").primaryKey(),
+  sessionId: uuid("session_id").notNull().references(() => driverCollectionSessions.id),
+  currencyCode: text("currency_code").notNull().references(() => currencies.code),
+  method: text("method").notNull(),
+  expectedAmount: numeric("expected_amount", { precision: 24, scale: 10 }).notNull(),
+  countedAmount: numeric("counted_amount", { precision: 24, scale: 10 }).notNull(),
+  differenceAmount: numeric("difference_amount", { precision: 24, scale: 10 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => [
+  uniqueIndex("driver_collection_settlement_pair_uq").on(table.sessionId, table.currencyCode, table.method)
+]);
