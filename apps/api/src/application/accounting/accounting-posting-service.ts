@@ -5,6 +5,8 @@ import { invoices } from "../../db/invoice-schema.js";
 import { createJournal, postJournal } from "./accounting-service.js";
 import { resolveRateToBase } from "../exchange/exchange-service.js";
 
+type PostingLine = { accountId: string; debitAmount?: string; creditAmount?: string; description: string; customerId: string };
+
 async function accountIds(db:Database,codes:string[]){
   const result=await db.execute(sql`SELECT code,id FROM chart_of_accounts WHERE code = ANY(${codes}::text[])`);
   const map=new Map<string,string>();
@@ -40,7 +42,7 @@ export async function postInvoiceIssued(db:Database,invoiceId:string,context:{ac
   const codes=["1100",...revenue.keys(),...(cogs.gt(0)?["5000","1200"]:[])];
   const accounts=await accountIds(db,codes);
   const rate=await resolveRateToBase(db,invoice.currency_code,"USD");
-  const lines=[{accountId:accounts.get("1100")!,debitAmount:invoice.total_amount,description:"Accounts receivable",customerId:invoice.customer_id}];
+  const lines: PostingLine[]=[{accountId:accounts.get("1100")!,debitAmount:invoice.total_amount,description:"Accounts receivable",customerId:invoice.customer_id}];
   for(const [code,value] of revenue)lines.push({accountId:accounts.get(code)!,creditAmount:value.toFixed(),description:"Revenue",customerId:invoice.customer_id});
   if(cogs.gt(0)){lines.push({accountId:accounts.get("5000")!,debitAmount:cogs.toFixed(),description:"Cost of goods sold",customerId:invoice.customer_id});lines.push({accountId:accounts.get("1200")!,creditAmount:cogs.toFixed(),description:"Inventory reduction",customerId:invoice.customer_id});}
   const created=await createJournal(db,{entryDate:invoice.issue_date,currencyCode:invoice.currency_code,exchangeRateToBase:rate,description:"Invoice "+invoiceId,sourceType:"invoice",sourceId:invoiceId,sourceEventKey:"invoice:"+invoiceId+":issued",lines},context);
