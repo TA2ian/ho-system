@@ -84,7 +84,7 @@ export const CampaignsPage: React.FC<{ api: ApiClient }> = ({ api }) => {
     { key:"plannedAdSpend", header:"الإنفاق المخطط", dir:"ltr", render:c=><span>{c.plannedAdSpend} {c.currencyCode}</span> },
     { key:"id", header:"الإجراءات", render:c=><div style={{display:"flex",gap:".4rem",flexWrap:"wrap"}}>
       <button className="ho-btn ho-btn-secondary ho-btn-sm" onClick={()=>void openDetail(c)}>التفاصيل</button>
-      {nextStatus(c.status) && <button className="ho-btn ho-btn-primary ho-btn-sm" onClick={()=>setAction({campaign:c,next:nextStatus(c)!})}>{statusLabel[nextStatus(c)!]}</button>}
+      {nextStatus(c.status) && <button className="ho-btn ho-btn-primary ho-btn-sm" onClick={()=>setAction({campaign:c,next:nextStatus(c.status)!})}>{statusLabel[nextStatus(c.status)!]}</button>}
     </div> }
   ];
 
