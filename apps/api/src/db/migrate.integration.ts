@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { allSchema } from "./client.js";
+import { beginIdempotency, completeIdempotency } from "../application/idempotency.js";
 import { migrateDatabase } from "./migrate.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -202,6 +205,64 @@ try {
     );
     await pool.query("DELETE FROM users WHERE id = $1", [driverId]);
   }
+
+  const idempotencyDb = drizzle(pool, { schema: allSchema });
+  const idempotencyScope = `integration:idempotency:${randomUUID()}`;
+  const idempotencyKey = `integration-key-${randomUUID()}`;
+  const requestHash = "integration-request-hash";
+
+  const firstIdempotency = await beginIdempotency(
+    idempotencyDb,
+    idempotencyScope,
+    idempotencyKey,
+    requestHash
+  );
+  if (firstIdempotency.kind !== "new") {
+    throw new Error(`Expected first idempotency attempt to be new, got ${firstIdempotency.kind}`);
+  }
+
+  const inProgress = await beginIdempotency(
+    idempotencyDb,
+    idempotencyScope,
+    idempotencyKey,
+    requestHash
+  );
+  if (inProgress.kind !== "conflict" || inProgress.reason !== "IN_PROGRESS") {
+    throw new Error("Expected repeated in-progress idempotency request to be rejected");
+  }
+
+  await completeIdempotency(idempotencyDb, firstIdempotency.id, 201, {
+    data: { verification: "ok" }
+  });
+
+  const replay = await beginIdempotency(
+    idempotencyDb,
+    idempotencyScope,
+    idempotencyKey,
+    requestHash
+  );
+  if (
+    replay.kind !== "replay" ||
+    replay.status !== 201 ||
+    JSON.stringify(replay.body) !== JSON.stringify({ data: { verification: "ok" } })
+  ) {
+    throw new Error("Expected completed idempotency request to replay its stored response");
+  }
+
+  const reusedWithDifferentBody = await beginIdempotency(
+    idempotencyDb,
+    idempotencyScope,
+    idempotencyKey,
+    "different-request-hash"
+  );
+  if (reusedWithDifferentBody.kind !== "conflict" || reusedWithDifferentBody.reason !== "KEY_REUSED") {
+    throw new Error("Expected idempotency key reuse with a different request hash to be rejected");
+  }
+
+  await pool.query(
+    "DELETE FROM idempotency_keys WHERE scope = $1 AND idempotency_key = $2",
+    [idempotencyScope, idempotencyKey]
+  );
 
   await migrateDatabase();
 
