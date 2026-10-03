@@ -40,6 +40,7 @@
 - Receivables — customer receivable listing with server-side payment-allocation/reversal-aware balance calculation and frontend module implemented
 - Payments — create, paginated listing, allocation, and reversal flows with accounting posting/reversal and frontend module implemented
 - Campaigns and advertising partner scopes — API lifecycle, spend/reversal, audit protection, and responsive operational frontend implemented
+- Customer 360 expansion — normalized customer profile resources, media agreements, customer-linked operational history, and server-authoritative media-buyer relationships are specified separately before frontend expansion
 - Delivery and driver workflows — responsive operational frontend implemented on the existing assignment/status/collection API
 - Driver collection sessions and manual settlement — session open/view/close UI implemented
 
