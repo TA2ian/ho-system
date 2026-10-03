@@ -44,6 +44,42 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /customers/{customerId}/phones:
+    get:
+      tags: [Customers]
+      operationId: listCustomerPhones
+      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }, { $ref: '#/components/parameters/PaginationLimit' }, { $ref: '#/components/parameters/PaginationOffset' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Customers]
+      operationId: createCustomerPhone
+      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /customers/{customerId}/addresses:
+    get:
+      tags: [Customers]
+      operationId: listCustomerAddresses
+      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }, { $ref: '#/components/parameters/PaginationLimit' }, { $ref: '#/components/parameters/PaginationOffset' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Customers]
+      operationId: createCustomerAddress
+      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /customers/{customerId}/social-accounts:
+    get:
+      tags: [Customers]
+      operationId: listCustomerSocialAccounts
+      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }, { $ref: '#/components/parameters/PaginationLimit' }, { $ref: '#/components/parameters/PaginationOffset' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Customers]
+      operationId: createCustomerSocialAccount
+      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
   /catalog/categories:
     get:
       tags: [Catalog]
