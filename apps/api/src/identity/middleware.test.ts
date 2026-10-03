@@ -96,7 +96,9 @@ test("unknown identities return 401", async () => {
               return {
                 innerJoin() {
                   return {
-                    leftJoin() {
+                    innerJoin() {
+                      return {
+                        leftJoin() {
                       return {
                         leftJoin() {
                           return {
