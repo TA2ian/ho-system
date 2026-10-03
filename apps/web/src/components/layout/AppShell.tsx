@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { TopBar } from "./TopBar";
 import { Sidebar, NavItem } from "./Sidebar";
 
@@ -18,13 +18,20 @@ export const AppShell: React.FC<AppShellProps> = ({
   children,
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const toggleButtonRef = useRef<HTMLButtonElement>(null);
   const activeItem = navItems.find((i) => i.id === activeId);
+
+  const closeSidebar = () => {
+    setSidebarOpen(false);
+    requestAnimationFrame(() => toggleButtonRef.current?.focus());
+  };
 
   return (
     <div className="ho-app-shell" dir="rtl">
       <TopBar
         sidebarOpen={sidebarOpen}
         sidebarId="ho-main-navigation"
+        toggleButtonRef={toggleButtonRef}
         onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
         onEndSession={onEndSession}
       />
@@ -36,7 +43,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           activeId={activeId}
           onSelect={onSelectNav}
           isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
+          onClose={closeSidebar}
         />
 
         <main className="ho-main-content">
