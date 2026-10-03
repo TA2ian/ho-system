@@ -44,8 +44,8 @@ export async function reverseSourceJournal(
   sourceEventKey: string,
   context: { actorId: string; requestId: string; idempotencyKey: string }
 ): Promise<string> {
-  const rows = await db.execute(sql`SELECT id, status FROM journal_entries WHERE source_event_key = ${sourceEventKey} LIMIT 1 FOR UPDATE`);
-  const entry = rows.rows[0] as { id: string; status: string } | undefined;
+  const rows = await db.execute(sql`SELECT id, status, entry_date FROM journal_entries WHERE source_event_key = ${sourceEventKey} LIMIT 1 FOR UPDATE`);
+  const entry = rows.rows[0] as { id: string; status: string; entry_date: string } | undefined;
   if (!entry) throw new Error("Missing accounting journal for " + sourceEventKey);
   if (entry.status !== "posted") throw new Error("Accounting journal is not posted for " + sourceEventKey);
   const existingReversal = await db.execute(sql`SELECT id FROM journal_entries WHERE reverses_entry_id = ${entry.id}::uuid LIMIT 1`);
@@ -55,12 +55,12 @@ export async function reverseSourceJournal(
     SELECT 1
     FROM accounting_periods
     WHERE status = 'open'
-      AND period_start <= (SELECT entry_date FROM journal_entries WHERE id = ${entry.id}::uuid)
-      AND period_end >= (SELECT entry_date FROM journal_entries WHERE id = ${entry.id}::uuid)
+      AND period_start <= ${entry.entry_date}
+      AND period_end >= ${entry.entry_date}
     LIMIT 1
   `);
   const reversalDate = openOriginalPeriod.rows[0]
-    ? String((await db.execute(sql`SELECT entry_date FROM journal_entries WHERE id = ${entry.id}::uuid`)).rows[0]?.entry_date)
+    ? entry.entry_date
     : new Date().toISOString().slice(0, 10);
 
   return (await reverseJournal(db, entry.id, {
