@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { Database } from "../../db/client.js";
 import { accountingPeriods, chartOfAccounts, journalEntries, journalLines } from "../../db/accounting-schema.js";
 import { ApplicationError } from "../../domain/errors.js";
+import { pageRows, type Pagination } from "../pagination.js";
 import { recordAuditEvent } from "../audit.js";
 
 const uuid=z.string().uuid();
@@ -43,14 +44,22 @@ export async function closePeriod(db:Database,periodId:string,context:{actorId:s
   await recordAuditEvent(db,{actorId:context.actorId,action:"accounting.period_closed",resourceType:"accounting_period",resourceId:periodId,requestId:context.requestId,idempotencyKey:context.idempotencyKey,metadata:{}});
   return updated;
 }
-export async function listPeriods(db:Database){return db.select().from(accountingPeriods).orderBy(asc(accountingPeriods.periodStart));}
+export async function listPeriods(db:Database, pagination: Pagination){
+  const rows=await db.select().from(accountingPeriods).orderBy(asc(accountingPeriods.periodStart))
+    .limit(pagination.limit + 1).offset(pagination.offset);
+  return pageRows(rows, pagination);
+}
 export async function createAccount(db:Database,input:z.infer<typeof createAccountInputSchema>,context:{actorId:string;requestId:string;idempotencyKey:string}){
   const [row]=await db.insert(chartOfAccounts).values({id:randomUUID(),code:input.code.trim(),name:input.name.trim(),accountType:input.accountType,normalBalance:input.normalBalance,parentId:input.parentId??null}).returning();
   if(!row)throw new ApplicationError("ACCOUNT_CREATE_FAILED",500,"تعذر إنشاء الحساب");
   await recordAuditEvent(db,{actorId:context.actorId,action:"accounting.account_created",resourceType:"chart_of_account",resourceId:row.id,requestId:context.requestId,idempotencyKey:context.idempotencyKey,metadata:{code:row.code}});
   return row;
 }
-export async function listAccounts(db:Database){return db.select().from(chartOfAccounts).where(eq(chartOfAccounts.isActive,true)).orderBy(asc(chartOfAccounts.code));}
+export async function listAccounts(db:Database, pagination: Pagination){
+  const rows=await db.select().from(chartOfAccounts).where(eq(chartOfAccounts.isActive,true))
+    .orderBy(asc(chartOfAccounts.code)).limit(pagination.limit + 1).offset(pagination.offset);
+  return pageRows(rows, pagination);
+}
 
 export async function createJournal(db:Database,input:z.infer<typeof createJournalInputSchema>,context:{actorId:string;requestId:string;idempotencyKey:string}){
   assertBalanced(input.lines,input.exchangeRateToBase);
