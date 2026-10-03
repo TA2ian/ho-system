@@ -152,9 +152,16 @@ paths:
       parameters:
         - $ref: '#/components/parameters/PaginationLimit'
         - $ref: '#/components/parameters/PaginationOffset'
-      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }]
+        - $ref: '#/components/parameters/UuidCustomerId'
       responses: { '200': { $ref: '#/components/responses/DataResponse' } }
   /payments:
+    get:
+      tags: [Payments]
+      operationId: listPayments
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
     post:
       tags: [Payments]
       operationId: createPayment
