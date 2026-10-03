@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { Decimal } from "decimal.js";
 import { z } from "zod";
 import type { Database } from "../../db/client.js";
@@ -10,6 +10,7 @@ import { ApplicationError } from "../../domain/errors.js";
 import type { Invoice, InvoiceLine, InvoiceStatus } from "../../domain/invoice.js";
 import { recordAuditEvent } from "../audit.js";
 import { postInvoiceIssued, postInvoiceVoided } from "../accounting/accounting-posting-service.js";
+import { pageRows, type Pagination } from "../pagination.js";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const createInvoiceInputSchema = z.object({
@@ -22,6 +23,14 @@ function toInvoice(row: typeof invoices.$inferSelect): Invoice {
   return { ...row, status: row.status as InvoiceStatus };
 }
 function toLine(row: typeof invoiceLines.$inferSelect): InvoiceLine { return row; }
+
+export async function listInvoices(db: Database, pagination: Pagination) {
+  const rows = await db.select().from(invoices)
+    .orderBy(desc(invoices.createdAt))
+    .limit(pagination.limit + 1)
+    .offset(pagination.offset);
+  return pageRows(rows.map(toInvoice), pagination);
+}
 
 export async function createInvoiceFromSalesOrder(db: Database, input: z.infer<typeof createInvoiceInputSchema>, context: { actorId: string; requestId: string; idempotencyKey: string }): Promise<{ invoice: Invoice; lines: InvoiceLine[] }> {
   const rows = await db.execute(sql`SELECT id, customer_id, currency_code, status, notes FROM sales_orders WHERE id = ${input.salesOrderId}::uuid FOR UPDATE`);
