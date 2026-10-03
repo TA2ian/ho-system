@@ -43,7 +43,15 @@ export function App() {
   const [active, setActive] = useState<string>("dashboard");
 
   const api = useMemo(
-    () => new ApiClient(import.meta.env.VITE_API_BASE_URL || "/api/v1/", () => session?.token ?? null),
+    () =>
+      new ApiClient(
+        import.meta.env.VITE_API_BASE_URL || "/api/v1/",
+        () => session?.token ?? null,
+        () => {
+          clearSession();
+          setSessionState(null);
+        }
+      ),
     [session]
   );
 
