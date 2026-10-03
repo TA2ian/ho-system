@@ -1,7 +1,9 @@
 import { buildApp } from "./app.js";
 import { config } from "./config.js";
 import { closeDatabase, createDatabase } from "./db/client.js";
-import { unconfiguredAuthenticationAdapter } from "./identity/unconfigured-adapter.js";
+import { assertProductionAuthenticationConfigured, unconfiguredAuthenticationAdapter } from "./identity/unconfigured-adapter.js";
+
+assertProductionAuthenticationConfigured(config.NODE_ENV, unconfiguredAuthenticationAdapter);
 
 const { db, pool } = createDatabase();
 const app = buildApp({
