@@ -56,11 +56,13 @@
 - Security/RBAC audit completed — authentication boundary, route permissions, ownership checks, resource-scope semantics, rate limiting, and production CORS fail-closed guard reviewed
 
 ## Phase 6 — Arabic PWA
-- Preserve Arabic-first UX direction
-- RTL
-- Responsive layouts
-- Offline-safe shell
-- API integration
+- Preserve Arabic-first UX direction — foundation established
+- RTL — foundation established
+- Responsive layouts — foundation established
+- Offline-safe shell — static shell only; API responses are not cached
+- API integration — transport boundary established with bearer authentication and idempotency-aware POST support
+- Firebase Hosting configuration added
+- Web typecheck/build/audit added to CI and verified successfully
 
 ## Phase 7 — Verification
 - Unit tests
