@@ -107,6 +107,13 @@ paths:
       parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses: { '200': { $ref: '#/components/responses/DataResponse' } }
   /invoices:
+    get:
+      tags: [Invoices]
+      operationId: listInvoices
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
     post:
       tags: [Invoices]
       operationId: createInvoice
