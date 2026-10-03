@@ -190,6 +190,18 @@ Documents remain intentionally blocked until the provider-neutral storage contra
 
 The customer selector should remain reusable by Sales Orders, Invoices, Receivables, Payments, and future media-buying workflows.
 
+## 9A. Customer 360 implementation handoff
+
+The executable frontend synchronization contract for the currently implemented Customer 360 surface is maintained in `docs/lovable-customer-360-handoff.md`.
+
+Lovable must use that document when implementing the Customer detail experience. It is intentionally narrower than the long-term Customer 360 vision and lists only server capabilities that exist on `foundation/v1`.
+
+The synchronization rule is explicit:
+
+`Backend behavior -> OpenAPI/API contract -> Lovable implementation handoff -> frontend implementation -> verification against backend`
+
+A UI feature is not considered implemented merely because Lovable renders it or the frontend builds successfully. Route, payload, permission, idempotency, error-state, and server-authority behavior must match the backend contract.
+
 ## 10. Sales Orders
 
 The sales-order experience should preserve the existing lifecycle:
