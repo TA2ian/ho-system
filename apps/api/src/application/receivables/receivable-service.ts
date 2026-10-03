@@ -3,6 +3,7 @@ import { Decimal } from "decimal.js";
 import { z } from "zod";
 import type { Database } from "../../db/client.js";
 import { ApplicationError } from "../../domain/errors.js";
+import { pageRows, type Pagination } from "../pagination.js";
 
 const uuidSchema = z.string().uuid();
 
@@ -95,7 +96,7 @@ export async function getInvoiceReceivable(db: Database, invoiceId: string) {
   return mapReceivable(row);
 }
 
-export async function listCustomerReceivables(db: Database, customerId: string) {
+export async function listCustomerReceivables(db: Database, customerId: string, pagination: Pagination) {
   const parsedId = uuidSchema.safeParse(customerId);
   if (!parsedId.success) {
     throw new ApplicationError("CUSTOMER_ID_INVALID", 400, "معرّف العميل غير صالح");
@@ -147,11 +148,12 @@ export async function listCustomerReceivables(db: Database, customerId: string) 
   `);
 
   const rows = result.rows as Array<ReceivableRow>;
-  return rows.map((row) => {
+  const mapped = rows.map((row) => {
     const outstanding = new Decimal(row.outstanding_amount);
     if (outstanding.isNegative()) {
       throw new ApplicationError("RECEIVABLE_INVARIANT_BROKEN", 500, "تعذر حساب الرصيد المستحق");
     }
     return mapReceivable(row);
   });
+  return pageRows(mapped, pagination);
 }
