@@ -79,13 +79,22 @@ export async function openCollection(
     )).limit(1);
   if (existing[0]) throw new ApplicationError("COLLECTION_ALREADY_OPEN", 409, "لديك جلسة تحصيل مفتوحة بالفعل");
 
-  const [session] = await db.insert(driverCollectionSessions).values({
-    id: randomUUID(),
-    driverUserId: input.driverUserId,
-    status: "open",
-    openedBy: context.actorId,
-    notes: input.notes?.trim() || null
-  }).returning();
+  let session: typeof driverCollectionSessions.$inferSelect | undefined;
+  try {
+    const [created] = await db.insert(driverCollectionSessions).values({
+      id: randomUUID(),
+      driverUserId: input.driverUserId,
+      status: "open",
+      openedBy: context.actorId,
+      notes: input.notes?.trim() || null
+    }).returning();
+    session = created;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "23505") {
+      throw new ApplicationError("COLLECTION_ALREADY_OPEN", 409, "لديك جلسة تحصيل مفتوحة بالفعل");
+    }
+    throw error;
+  }
 
   if (!session) throw new ApplicationError("COLLECTION_CREATE_FAILED", 500, "تعذر فتح جلسة التحصيل");
 
