@@ -2,6 +2,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import type { Pool } from "pg";
+import { z } from "zod";
 import { config } from "./config.js";
 import { checkDatabaseHealth } from "./db/health.js";
 import type { Database } from "./db/client.js";
