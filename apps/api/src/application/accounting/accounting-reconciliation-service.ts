@@ -53,7 +53,8 @@ export async function reconcileOperationalJournals(
         AND et.completed_at::date BETWEEN \${startDate}::date AND \${endDate}::date
     )
     SELECT e.category, e.source_id, e.source_date::text, e.event_key,
-           je.id::text AS journal_entry_id, je.status
+           je.id::text AS journal_entry_id, je.status,
+           COUNT(*) OVER ()::int AS total_expected
     FROM expected e
     LEFT JOIN journal_entries je ON je.source_event_key = e.event_key
     WHERE je.id IS NULL OR je.status <> 'posted'
@@ -99,14 +100,14 @@ export async function reconcileOperationalJournals(
     SELECT er.category, er.source_id, er.source_date::text, er.event_key,
            original.id::text AS original_journal_entry_id,
            reversal.id::text AS reversal_journal_entry_id,
-           reversal.status AS reversal_status
+           reversal.status AS reversal_status,
+           COUNT(*) OVER ()::int AS total_expected
     FROM expected_reversals er
     LEFT JOIN journal_entries original ON original.source_event_key = er.event_key
     LEFT JOIN journal_entries reversal ON reversal.reverses_entry_id = original.id
-    WHERE original.id IS NULL
-       OR original.status <> 'posted'
-       OR reversal.id IS NULL
-       OR reversal.status <> 'posted'
+    WHERE original.id IS NOT NULL
+      AND original.status = 'posted'
+      AND (reversal.id IS NULL OR reversal.status <> 'posted')
     ORDER BY er.source_date, er.category, er.source_id
   \`);
 
@@ -119,6 +120,7 @@ export async function reconcileOperationalJournals(
     event_key: string;
     journal_entry_id: string | null;
     status: string | null;
+    total_expected: number;
   }>) {
     issues.push({
       category: row.category,
@@ -138,6 +140,7 @@ export async function reconcileOperationalJournals(
     original_journal_entry_id: string | null;
     reversal_journal_entry_id: string | null;
     reversal_status: string | null;
+    total_expected: number;
   }>) {
     issues.push({
       category: row.category,
@@ -149,9 +152,11 @@ export async function reconcileOperationalJournals(
     });
   }
 
+  const postingSample = postingRows.rows[0] as { total_expected?: number } | undefined;
+  const reversalSample = reversalRows.rows[0] as { total_expected?: number } | undefined;
   const summary = {
-    checkedPostings: postingRows.rows.length,
-    checkedReversals: reversalRows.rows.length,
+    checkedPostings: postingSample?.total_expected ?? 0,
+    checkedReversals: reversalSample?.total_expected ?? 0,
     issueCount: issues.length,
     missingPostings: issues.filter((item) => item.issue === "missing_posting").length,
     unpostedPostings: issues.filter((item) => item.issue === "unposted_posting").length,
