@@ -10,6 +10,7 @@ import {
   payments
 } from "../../db/payment-schema.js";
 import { ApplicationError } from "../../domain/errors.js";
+import { recordAuditEvent } from "../audit.js";
 import { recordDeliveryCollection, deliveryCollectionInputSchema } from "../delivery/delivery-service.js";
 
 const decimalInput = z.string()
