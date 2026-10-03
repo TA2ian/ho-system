@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildApp } from "./app.js";
+process.env.DATABASE_URL ??= "postgresql://test:test@localhost:5432/test";
+
+const { buildApp } = await import("./app.js");
 import { InvalidAuthenticationError, type AuthenticationAdapter } from "./identity/auth.js";
 
 test("protected routes reject missing credentials", async () => {
