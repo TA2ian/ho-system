@@ -157,6 +157,12 @@ export function buildApp(dependencies: {
     return reply.status(result.status).send(result.body);
   });
 
+  app.get<{ Params: { customerId: string } }>("/api/v1/customers/:customerId", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "customers.read");
+    return reply.send({ data: await getCustomer(dependencies.db, request.params.customerId) });
+  });
+
   app.get<{ Params: { customerId: string } }>("/api/v1/customers/:customerId/phones", async (request, reply) => {
     if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
     assertPermission(request.principal, "customers.read");
