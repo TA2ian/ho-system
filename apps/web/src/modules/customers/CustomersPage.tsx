@@ -34,22 +34,22 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({ api }) => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const loadCustomers = useCallback(
-    async (nextOffset: number = offset) => {
+    async (targetOffset: number) => {
       setState("loading");
       setError(null);
       try {
         const response = await api.get<CustomersApiResponse>(
-          `customers?limit=${limit}&offset=${nextOffset}`
+          `customers?limit=${limit}&offset=${targetOffset}`
         );
         setPage(response);
-        setOffset(nextOffset);
+        setOffset(targetOffset);
         setState("idle");
       } catch (err) {
         setState("error");
         setError(err instanceof Error ? err.message : "تعذر استرجاع سجل العملاء من الخادم.");
       }
     },
-    [api, limit, offset]
+    [api, limit]
   );
 
   useEffect(() => {
