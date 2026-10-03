@@ -37,6 +37,7 @@ export const createCustomerSocialAccountInputSchema = z.object({
 });
 
 async function assertCustomer(db: Database, customerId: string) {
+  if (!uuid.safeParse(customerId).success) throw new ApplicationError("CUSTOMER_ID_INVALID", 400, "معرّف العميل غير صالح");
   const [row] = await db.select({ id: customers.id, status: customers.status }).from(customers).where(eq(customers.id, customerId)).limit(1);
   if (!row) throw new ApplicationError("CUSTOMER_NOT_FOUND", 404, "العميل غير موجود");
   return row;
