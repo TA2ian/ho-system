@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 export interface NavItem {
   id: string;
@@ -8,6 +8,7 @@ export interface NavItem {
 }
 
 interface SidebarProps {
+  id: string;
   items: NavItem[];
   activeId: string;
   onSelect: (id: string) => void;
@@ -16,12 +17,30 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
+  id,
   items,
   activeId,
   onSelect,
   isOpen,
   onClose,
 }) => {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
   const operations = items.filter((i) => i.category === "operations");
   const financials = items.filter((i) => i.category === "financials");
   const foundational = items.filter((i) => i.category === "foundation");
@@ -60,12 +79,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      <div
+      <button
+        type="button"
         className={`ho-sidebar-overlay ${isOpen ? "is-visible" : ""}`}
         onClick={onClose}
-        aria-hidden="true"
+        aria-label="إغلاق القائمة الجانبية"
       />
-      <aside className={`ho-sidebar ${isOpen ? "is-open" : ""}`} aria-label="التنقل الرئيسي">
+      <aside
+        id={id}
+        className={`ho-sidebar ${isOpen ? "is-open" : ""}`}
+        aria-label="التنقل الرئيسي"
+      >
         <nav className="ho-sidebar-nav">
           {renderGroup("العمليات وسجل العملاء", operations)}
           {renderGroup("المالية والتحصيل", financials)}
