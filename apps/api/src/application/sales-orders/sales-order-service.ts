@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "../../db/client.js";
 import { catalogItems } from "../../db/catalog-schema.js";
@@ -9,6 +9,7 @@ import { recordAuditEvent } from "../audit.js";
 import { ApplicationError } from "../../domain/errors.js";
 import { Decimal } from "decimal.js";
 import type { SalesOrder, SalesOrderLine } from "../../domain/sales-order.js";
+import { pageRows, type Pagination } from "../pagination.js";
 
 const decimalPattern = /^\d+(\.\d{1,10})?$/;
 
@@ -112,6 +113,14 @@ export async function createSalesOrder(
   return { order: toOrder(order), lines };
 }
 
+
+export async function listSalesOrders(db: Database, pagination: Pagination) {
+  const rows = await db.select().from(salesOrders)
+    .orderBy(desc(salesOrders.createdAt))
+    .limit(pagination.limit + 1)
+    .offset(pagination.offset);
+  return pageRows(rows.map(toOrder), pagination);
+}
 
 export async function getSalesOrder(
   db: Database,
