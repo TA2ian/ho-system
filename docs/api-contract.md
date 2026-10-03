@@ -31,3 +31,25 @@ Financial report amounts and persisted accounting amounts remain decimal strings
 ## Versioning rule
 
 Changes to `/api/v1` behavior must update the OpenAPI contract and this document in the same change. Breaking transport changes require a new API version rather than silently changing the existing v1 contract.
+
+## Customer 360 contact resources
+
+Customer contact extensions are server-authoritative child resources. They require `customers.read` for reads and `customers.write` for mutations.
+
+- `/api/v1/customers/{customerId}/phones`
+- `/api/v1/customers/{customerId}/addresses`
+- `/api/v1/customers/{customerId}/social-accounts`
+
+Their POST operations require the standard `Idempotency-Key` contract and record audit events. Pagination uses the standard v1 pagination contract.
+
+## Media Agreements
+
+Media Agreements are an independent Customer 360 resource:
+
+- `GET /api/v1/media-agreements`
+- `GET /api/v1/media-agreements/{id}`
+- `POST /api/v1/media-agreements`
+
+They require `customers.read` for reads and `customers.write` for creation. Monetary fields are decimal strings. Creation validates the referenced active customer and currency and records an audit event.
+
+Campaigns are not yet required to reference a Media Agreement. This remains a separate domain-integration decision until the campaign contract is explicitly expanded.
