@@ -12,7 +12,7 @@ declare module "fastify" {
 function bearerCredential(request: FastifyRequest): string | null {
   const header = request.headers.authorization;
   if (!header) return null;
-  const match = /^Bearer\\s+(.+)$/i.exec(header);
+  const match = /^Bearer\s+(.+)$/i.exec(header);
   return match?.[1]?.trim() || null;
 }
 
