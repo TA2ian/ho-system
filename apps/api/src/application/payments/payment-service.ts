@@ -77,6 +77,8 @@ export async function createPayment(
 
   if (!payment) throw new ApplicationError("PAYMENT_CREATE_FAILED", 500, "تعذر تسجيل الدفعة");
 
+  await postPaymentRecorded(db, id, context);
+
   await recordAuditEvent(db, {
     actorId: context.actorId,
     action: "payment.recorded",
@@ -143,13 +145,16 @@ export async function allocatePayment(
   const invoiceOutstanding = new Decimal(invoice.total_amount).sub(allocatedInvoice);
   if (requested.gt(invoiceOutstanding)) throw new ApplicationError("INVOICE_OVER_ALLOCATION", 409, "مبلغ التخصيص يتجاوز الرصيد المستحق على الفاتورة");
 
+  const allocationId = randomUUID();
   await db.insert(paymentAllocations).values({
-    id: randomUUID(),
+    id: allocationId,
     paymentId,
     invoiceId: input.invoiceId,
     amount: requested.toFixed(),
     currencyCode: payment.currency_code
   });
+
+  await postPaymentAllocated(db, allocationId, context);
 
   await recordAuditEvent(db, {
     actorId: context.actorId,
