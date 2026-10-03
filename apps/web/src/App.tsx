@@ -6,6 +6,7 @@ import { SalesOrdersPage } from "./modules/sales-orders/SalesOrdersPage";
 import { InvoicesPage } from "./modules/invoices/InvoicesPage";
 import { ReceivablesPage } from "./modules/receivables/ReceivablesPage";
 import { PaymentsPage } from "./modules/payments/PaymentsPage";
+import { CampaignsPage } from "./modules/campaigns/CampaignsPage";
 
 import { AppShell } from "./components/layout/AppShell";
 import type { NavItem } from "./components/layout/Sidebar";
@@ -20,6 +21,7 @@ const navItems: NavItem[] = [
   { id: "invoices", label: "الفواتير", category: "financials", status: "implemented" },
   { id: "receivables", label: "الذمم المدينة", category: "financials", status: "implemented" },
   { id: "payments", label: "التحصيل والمدفوعات", category: "financials", status: "implemented" },
+  { id: "campaigns", label: "الحملات الإعلانية", category: "operations", status: "implemented" },
   { id: "delivery", label: "التوصيل", category: "foundation", status: "foundation-only" },
   { id: "accounting", label: "المحاسبة", category: "foundation", status: "foundation-only" },
 ];
@@ -78,6 +80,8 @@ export function App() {
         <ReceivablesPage api={api} />
       ) : active === "payments" ? (
         <PaymentsPage api={api} />
+      ) : active === "campaigns" ? (
+        <CampaignsPage api={api} />
       ) : (
         <FoundationalModulePlaceholder
           title={navItems.find((i) => i.id === active)?.label || active}
