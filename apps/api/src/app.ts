@@ -37,6 +37,10 @@ export function buildApp(dependencies: {
 }) {
   const rateLimiter = createRateLimiter(config.RATE_LIMIT_MAX_REQUESTS, config.RATE_LIMIT_WINDOW_SECONDS);
 
+  if (config.NODE_ENV === "production" && /^(\*|https?:\/\/localhost(?::\d+)?$)/i.test(config.CORS_ORIGIN.trim())) {
+    throw new Error("CORS_ORIGIN must be an explicit non-local origin in production");
+  }
+
   const app = Fastify({
     logger: { level: config.NODE_ENV === "production" ? "info" : "debug" },
     disableRequestLogging: false,
