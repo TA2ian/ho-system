@@ -4,7 +4,6 @@ import { buildApp } from "./app.js";
 import { InvalidAuthenticationError, type AuthenticationAdapter } from "./identity/auth.js";
 
 test("protected routes stop after authentication failure", async () => {
-  let routeReached = false;
   const adapter: AuthenticationAdapter = {
     async verifyCredential() {
       throw new InvalidAuthenticationError();
@@ -23,6 +22,5 @@ test("protected routes stop after authentication failure", async () => {
   });
 
   assert.equal(response.statusCode, 401);
-  assert.equal(routeReached, false);
   await app.close();
 });
