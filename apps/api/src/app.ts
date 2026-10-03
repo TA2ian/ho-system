@@ -1121,9 +1121,13 @@ export function buildApp(dependencies: {
   });
 
   app.setErrorHandler((error, _request, reply) => {
-    app.log.error(error);
+    const statusCode = typeof error === "object" && error !== null && "statusCode" in error
+      ? (error as { statusCode?: unknown }).statusCode
+      : undefined;
 
     if (error instanceof ApplicationError) {
+      if (error.status >= 500) app.log.error(error);
+      else app.log.warn(error);
       return reply.status(error.status).send({
         error: error.code,
         message: error.message
@@ -1131,23 +1135,59 @@ export function buildApp(dependencies: {
     }
 
     if (error instanceof Error && error.message === "FORBIDDEN") {
+      app.log.warn(error);
       return reply.status(403).send({
         error: "FORBIDDEN",
         message: "ليس لديك الصلاحية لتنفيذ هذا الإجراء"
       });
     }
 
-    const statusCode = typeof error === "object" && error !== null && "statusCode" in error
-      ? (error as { statusCode?: unknown }).statusCode
+    const validation = typeof error === "object" && error !== null && "validation" in error
+      ? (error as { validation?: unknown }).validation
       : undefined;
 
+    if (Array.isArray(validation)) {
+      app.log.warn(error);
+      return reply.status(400).send({
+        error: "VALIDATION_ERROR",
+        message: "بيانات الطلب غير صالحة",
+        issues: validation
+      });
+    }
+
+    if (error instanceof Error && (error as { code?: string }).code === "FST_ERR_CTP_BODY_TOO_LARGE") {
+      app.log.warn(error);
+      return reply.status(413).send({
+        error: "REQUEST_TOO_LARGE",
+        message: "حجم الطلب يتجاوز الحد المسموح"
+      });
+    }
+
+    if (error instanceof Error && (error as { code?: string }).code === "FST_ERR_CTP_INVALID_JSON_BODY") {
+      app.log.warn(error);
+      return reply.status(400).send({
+        error: "INVALID_JSON",
+        message: "صيغة JSON غير صالحة"
+      });
+    }
+
+    if (statusCode === 404) {
+      app.log.warn(error);
+      return reply.status(404).send({
+        error: "NOT_FOUND",
+        message: "المسار المطلوب غير موجود"
+      });
+    }
+
     if (typeof statusCode === "number" && statusCode < 500) {
+      app.log.warn(error);
       return reply.status(statusCode).send({
         error: "REQUEST_ERROR",
         message: error instanceof Error ? error.message : "طلب غير صالح"
       });
     }
 
+    app.log.error(error);
     return reply.status(500).send({
       error: "INTERNAL_SERVER_ERROR",
       message: "حدث خطأ داخلي في الخادم"
