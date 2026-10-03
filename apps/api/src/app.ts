@@ -53,10 +53,12 @@ export function buildApp(dependencies: {
 
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health" || request.url === "/ready") return;
-    await authenticateRequest(request, reply, {
+    const authenticated = await authenticateRequest(request, reply, {
       db: dependencies.db,
       adapter: dependencies.authAdapter
     });
+
+    if (!authenticated) return;
 
     if (request.principal) {
       try {
