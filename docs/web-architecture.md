@@ -30,5 +30,7 @@ The build output is `apps/web/dist`. It can be deployed as a static PWA to Fireb
 
 1. Replace the temporary token-entry surface with the selected production identity provider.
 2. Add generated/validated API types from the OpenAPI contract.
-3. Implement domain screens incrementally, starting with customers and the operational dashboard.
-4. Add browser-level accessibility and responsive regression tests.
+3. Keep production identity-provider integration as a separate deployment concern; the foundation UI currently accepts an externally issued bearer token in memory only.
+4. Complete the remaining operational screens (delivery and accounting) against the existing API contracts.
+5. Add generated/validated API types from OpenAPI and browser-level accessibility/responsive regression tests.
+6. Use Lovable for the presentation/UX layer without moving authorization, financial calculations, idempotency, or accounting rules into the client.
