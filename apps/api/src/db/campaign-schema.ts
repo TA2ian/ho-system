@@ -51,3 +51,15 @@ export const campaignSpendEntries = pgTable("campaign_spend_entries", {
   index("campaign_spend_campaign_idx").on(table.campaignId),
   index("campaign_spend_spent_at_idx").on(table.spentAt)
 ]);
+
+export const campaignSpendReversals = pgTable("campaign_spend_reversals", {
+  id: uuid("id").primaryKey(),
+  spendId: uuid("spend_id").notNull().unique().references(() => campaignSpendEntries.id),
+  reason: text("reason").notNull(),
+  reversedBy: uuid("reversed_by").notNull().references(() => users.id),
+  reversedAt: timestamp("reversed_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => [
+  index("campaign_spend_reversals_spend_idx").on(table.spendId),
+  index("campaign_spend_reversals_reversed_at_idx").on(table.reversedAt)
+]);
