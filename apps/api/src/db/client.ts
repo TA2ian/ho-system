@@ -5,6 +5,7 @@ import * as schema from "./schema.js";
 import { customers } from "./customer-schema.js";
 import * as customer360Schema from "./customer-360-schema.js";
 import * as mediaAgreementSchema from "./media-agreement-schema.js";
+import * as customerBusinessSchema from "./customer-business-schema.js";
 import * as catalogSchema from "./catalog-schema.js";
 import * as salesSchema from "./sales-schema.js";
 import * as invoiceSchema from "./invoice-schema.js";
@@ -16,7 +17,7 @@ import * as employeeSchema from "./employee-schema.js";
 import * as expenseSchema from "./expense-schema.js";
 import * as accountingSchema from "./accounting-schema.js";
 
-export const allSchema = { ...schema, customers, ...customer360Schema, ...mediaAgreementSchema, ...catalogSchema, ...salesSchema, ...invoiceSchema, ...paymentSchema, ...paymentReversalSchema, ...deliverySchema, ...campaignSchema, ...employeeSchema, ...expenseSchema, ...accountingSchema };
+export const allSchema = { ...schema, customers, ...customer360Schema, ...mediaAgreementSchema, ...customerBusinessSchema, ...catalogSchema, ...salesSchema, ...invoiceSchema, ...paymentSchema, ...paymentReversalSchema, ...deliverySchema, ...campaignSchema, ...employeeSchema, ...expenseSchema, ...accountingSchema };
 
 export type Database = NodePgDatabase<typeof allSchema>;
 
