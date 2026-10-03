@@ -39,7 +39,7 @@
 - Invoices — API listing and lifecycle supported; frontend creation, issue/posting, and guarded void flow implemented
 - Receivables — customer receivable listing with server-side payment-allocation/reversal-aware balance calculation and frontend module implemented
 - Payments — create, paginated listing, allocation, and reversal flows with accounting posting/reversal and frontend module implemented
-- Campaigns and advertising partner scopes
+- Campaigns and advertising partner scopes — API lifecycle, spend/reversal, audit protection, and responsive operational frontend implemented
 - Delivery and driver workflows
 - Driver collection sessions and manual settlement
 
@@ -66,6 +66,7 @@
 - Invoices module — creation from confirmed orders, paginated listing, issue/posting, and guarded void implemented
 - Receivables module — customer invoice balances and allocation-aware outstanding amounts implemented
 - Payments module — recording, paginated listing, allocation, and reversal UI implemented
+- Campaigns module — campaign creation, lifecycle transitions, spend recording, immutable reversal flow, detail financial snapshot, and responsive operational UI implemented
 - Firebase Hosting configuration added
 - Web typecheck/build/audit added to CI and verified successfully
 
