@@ -14,7 +14,7 @@ try {
   const first = await pool.query<{ count: string }>(
     "SELECT count(*)::text AS count FROM schema_migrations"
   );
-  const expectedMigrations = 20;
+  const expectedMigrations = 21;
   if (Number(first.rows[0]?.count) !== expectedMigrations) {
     throw new Error(
       `Expected ${expectedMigrations} migrations, found ${first.rows[0]?.count ?? "none"}`
@@ -104,6 +104,22 @@ try {
   const missingTriggers = requiredTriggers.filter((trigger) => !foundTriggers.has(trigger));
   if (missingTriggers.length > 0) {
     throw new Error(`Missing financial immutability triggers: ${missingTriggers.join(", ")}`);
+  }
+
+  const exclusionResult = await pool.query<{ constraint_name: string }>(
+    `
+      SELECT con.conname AS constraint_name
+      FROM pg_constraint con
+      JOIN pg_class rel ON rel.oid = con.conrelid
+      JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+      WHERE nsp.nspname = 'public'
+        AND rel.relname = 'accounting_periods'
+        AND con.contype = 'x'
+        AND con.conname = 'accounting_periods_date_range_excl'
+    `
+  );
+  if (exclusionResult.rowCount !== 1) {
+    throw new Error("Missing accounting period non-overlap exclusion constraint");
   }
 
   const requiredAccounts = [
