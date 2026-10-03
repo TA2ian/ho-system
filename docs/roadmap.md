@@ -51,6 +51,8 @@
 - Reconciliation — operational-to-posted-journal consistency report implemented
 - Reporting read models — trial balance, general ledger, reconciliation, income statement, and balance sheet implemented
 - OpenAPI foundation/v1 transport contract snapshot added
+- API transport contract hardened — standardized errors, idempotency, bounded pagination, and contract documentation implemented
+- Fastify security dependency pinned to patched 5.12.5 release
 
 ## Phase 6 — Arabic PWA
 - Preserve Arabic-first UX direction
@@ -66,6 +68,7 @@
 - Authorization tests
 - Concurrency tests
 - Idempotency tests
+- API pagination/error-contract regression tests
 - Backup/restore verification
 
 ## Phase 8 — Production
