@@ -53,6 +53,7 @@
 - OpenAPI foundation/v1 transport contract snapshot added
 - API transport contract hardened — standardized errors, idempotency, bounded pagination, and contract documentation implemented
 - Fastify security dependency pinned to patched 5.12.5 release
+- Security/RBAC audit completed — authentication boundary, route permissions, ownership checks, resource-scope semantics, rate limiting, and production CORS fail-closed guard reviewed
 
 ## Phase 6 — Arabic PWA
 - Preserve Arabic-first UX direction
