@@ -1,11 +1,18 @@
 import React from "react";
 
 interface TopBarProps {
+  sidebarOpen: boolean;
+  sidebarId: string;
   onToggleSidebar: () => void;
   onEndSession: () => void;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar, onEndSession }) => {
+export const TopBar: React.FC<TopBarProps> = ({
+  sidebarOpen,
+  sidebarId,
+  onToggleSidebar,
+  onEndSession,
+}) => {
   return (
     <header className="ho-topbar">
       <div className="ho-topbar-start">
@@ -13,7 +20,9 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar, onEndSession })
           type="button"
           className="ho-hamburger-btn"
           onClick={onToggleSidebar}
-          aria-label="تبديل القائمة الجانبية"
+          aria-expanded={sidebarOpen}
+          aria-controls={sidebarId}
+          aria-label={sidebarOpen ? "إغلاق القائمة الجانبية" : "فتح القائمة الجانبية"}
         >
           <span className="ho-hamburger-line" />
           <span className="ho-hamburger-line" />
