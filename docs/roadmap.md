@@ -72,14 +72,14 @@
 - Web typecheck/build/audit added to CI and verified successfully
 
 ## Phase 7 — Verification
-- Unit tests
-- Integration tests
-- Database tests
-- Authorization tests
-- Concurrency tests
-- Idempotency tests
-- API pagination/error-contract regression tests
-- Backup/restore verification
+- Unit tests — domain, pagination, idempotency hashing, rate limiting, authentication, authorization, and delivery lifecycle coverage established
+- Integration tests — database migration verification is automated in CI
+- Database tests — schema/table/trigger/accounting constraints plus driver-collection concurrency guard verified by db:verify
+- Authorization tests — exact permission/scope semantics and missing/invalid authentication paths covered
+- Concurrency tests — simultaneous open collection sessions for one driver are rejected by a database unique partial index and exercised in db:verify
+- Idempotency tests — canonical request hashing and request-shape/type distinctions covered; end-to-end replay/race verification remains a follow-up
+- API pagination/error-contract regression tests — bounded pagination and authentication/error contract coverage established
+- Backup/restore verification — pending
 
 ## Phase 8 — Production
 - Container images
