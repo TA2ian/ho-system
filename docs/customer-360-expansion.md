@@ -82,9 +82,9 @@ Initial supported platforms may include Facebook, Instagram, Telegram, TikTok an
 Documents require a separate storage decision before implementation.
 The customer domain should store document metadata and references, not binary content directly in the customer row.
 
-The storage contract must define document type, customer ownership, external/storage reference, filename/media metadata, lifecycle/status, and audit information.
+The provider-neutral storage contract is now documented in `docs/storage-document-contract.md`. It defines the required lifecycle, private object access, server-generated object references, metadata, upload/download authorization, retention, and validation boundaries.
 
-Actual file storage and access control must be implemented as a separate reviewed capability.
+The current foundation still has no storage provider, upload service, or object-access capability. Therefore document tables, upload endpoints, download endpoints, and frontend document UI remain intentionally blocked until that storage capability is reviewed and implemented.
 
 ## Media agreements
 
