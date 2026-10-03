@@ -1,5 +1,10 @@
 node_modules
-dist
+npm-debug.log
 .git
-.env
+.github
 coverage
+.env
+.env.*
+!.env.example
+backups
+apps/web/dist
