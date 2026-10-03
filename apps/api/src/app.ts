@@ -179,7 +179,7 @@ export function buildApp(dependencies: {
     if (typeof key !== "string" || key.trim().length < 16 || key.length > 255) return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
     const idempotencyKey = key.trim();
     const result = await withTransaction(dependencies.pool, async (tx) => {
-      const idem = await beginIdempotency(tx, `customer:phone:create:${request.params.customerId}:${request.principal!.userId}`, hashRequestBody(parsed.data));
+      const idem = await beginIdempotency(tx, `customer:phone:create:${request.params.customerId}:${request.principal!.userId}`, idempotencyKey, hashRequestBody(parsed.data));
       if (idem.kind === "replay") return idem;
       if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
       const row = await createCustomerPhone(tx, request.params.customerId, parsed.data, { actorId: request.principal!.userId, requestId: request.id, idempotencyKey });
@@ -204,7 +204,7 @@ export function buildApp(dependencies: {
     if (typeof key !== "string" || key.trim().length < 16 || key.length > 255) return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
     const idempotencyKey = key.trim();
     const result = await withTransaction(dependencies.pool, async (tx) => {
-      const idem = await beginIdempotency(tx, `customer:address:create:${request.params.customerId}:${request.principal!.userId}`, hashRequestBody(parsed.data));
+      const idem = await beginIdempotency(tx, `customer:address:create:${request.params.customerId}:${request.principal!.userId}`, idempotencyKey, hashRequestBody(parsed.data));
       if (idem.kind === "replay") return idem;
       if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
       const row = await createCustomerAddress(tx, request.params.customerId, parsed.data, { actorId: request.principal!.userId, requestId: request.id, idempotencyKey });
@@ -229,7 +229,7 @@ export function buildApp(dependencies: {
     if (typeof key !== "string" || key.trim().length < 16 || key.length > 255) return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
     const idempotencyKey = key.trim();
     const result = await withTransaction(dependencies.pool, async (tx) => {
-      const idem = await beginIdempotency(tx, `customer:social:create:${request.params.customerId}:${request.principal!.userId}`, hashRequestBody(parsed.data));
+      const idem = await beginIdempotency(tx, `customer:social:create:${request.params.customerId}:${request.principal!.userId}`, idempotencyKey, hashRequestBody(parsed.data));
       if (idem.kind === "replay") return idem;
       if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
       const row = await createCustomerSocialAccount(tx, request.params.customerId, parsed.data, { actorId: request.principal!.userId, requestId: request.id, idempotencyKey });
@@ -253,7 +253,7 @@ export function buildApp(dependencies: {
     if (typeof key !== "string" || key.trim().length < 16 || key.length > 255) return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
     const idempotencyKey = key.trim();
     const result = await withTransaction(dependencies.pool, async (tx) => {
-      const idem = await beginIdempotency(tx, `customer:business-profile:${request.params.customerId}:${request.principal!.userId}`, hashRequestBody(parsed.data));
+      const idem = await beginIdempotency(tx, `customer:business-profile:${request.params.customerId}:${request.principal!.userId}`, idempotencyKey, hashRequestBody(parsed.data));
       if (idem.kind === "replay") return idem;
       if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
       const row = await upsertCustomerBusinessProfile(tx, request.params.customerId, parsed.data, { actorId: request.principal!.userId, requestId: request.id, idempotencyKey });
@@ -290,7 +290,7 @@ export function buildApp(dependencies: {
     if (typeof key !== "string" || key.trim().length < 16 || key.length > 255) return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
     const idempotencyKey = key.trim();
     const result = await withTransaction(dependencies.pool, async (tx) => {
-      const idem = await beginIdempotency(tx, `media-agreement:create:${request.principal!.userId}`, hashRequestBody(parsed.data));
+      const idem = await beginIdempotency(tx, `media-agreement:create:${request.principal!.userId}`, idempotencyKey, hashRequestBody(parsed.data));
       if (idem.kind === "replay") return idem;
       if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
       const agreement = await createMediaAgreement(tx, parsed.data, { actorId: request.principal!.userId, requestId: request.id, idempotencyKey });
