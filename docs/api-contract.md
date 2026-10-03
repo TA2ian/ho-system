@@ -53,3 +53,11 @@ Media Agreements are an independent Customer 360 resource:
 They require `customers.read` for reads and `customers.write` for creation. Monetary fields are decimal strings. Creation validates the referenced active customer and currency and records an audit event.
 
 Campaigns are not yet required to reference a Media Agreement. This remains a separate domain-integration decision until the campaign contract is explicitly expanded.
+
+
+Customer business profiles are available for customers whose type is `business`:
+
+- `GET /api/v1/customers/{customerId}/business-profile`
+- `PUT /api/v1/customers/{customerId}/business-profile`
+
+The write operation uses `Idempotency-Key`, validates the customer type server-side, and records an audit event.
