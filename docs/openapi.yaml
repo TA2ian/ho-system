@@ -429,6 +429,30 @@ paths:
       parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { $ref: '#/components/requestBodies/JsonObject' }
       responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /media-agreements:
+    get:
+      tags: [Customers]
+      operationId: listMediaAgreements
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+        - name: customerId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Customers]
+      operationId: createMediaAgreement
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /media-agreements/{id}:
+    get:
+      tags: [Customers]
+      operationId: getMediaAgreement
+      parameters: [{ $ref: '#/components/parameters/UuidId' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
   /campaigns:
     get:
       tags: [Campaigns]
