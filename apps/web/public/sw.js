@@ -15,9 +15,15 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const request = event.request;
-  if (request.method !== "GET" || new URL(request.url).origin !== self.location.origin) return;
+  const url = new URL(request.url);
+  if (request.method !== "GET" || url.origin !== self.location.origin) return;
 
-  event.respondWith(
-    fetch(request).catch(() => caches.match(request).then((cached) => cached || caches.match("/")))
-  );
+  if (request.mode === "navigate") {
+    event.respondWith(fetch(request).catch(() => caches.match("/")));
+    return;
+  }
+
+  if (SHELL.includes(url.pathname)) {
+    event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
+  }
 });
