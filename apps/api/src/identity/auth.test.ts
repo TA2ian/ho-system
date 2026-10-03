@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { assertPermission, hasPermission, hasScope, type AuthenticatedPrincipal } from "./auth.js";
+import { assertPermission, hasPermission, hasScope, type AuthenticatedPrincipal, type AuthenticationAdapter } from "./auth.js";
+import { assertProductionAuthenticationConfigured, unconfiguredAuthenticationAdapter } from "./unconfigured-adapter.js";
 
 const principal: AuthenticatedPrincipal = {
   userId: "00000000-0000-0000-0000-000000000001",
@@ -22,4 +23,20 @@ test("resource scopes are exact-match", () => {
   assert.equal(hasScope(principal, "campaign", "00000000-0000-0000-0000-000000000002"), true);
   assert.equal(hasScope(principal, "campaign", "00000000-0000-0000-0000-000000000003"), false);
   assert.equal(hasScope(principal, "customer", "00000000-0000-0000-0000-000000000002"), false);
+});
+
+test("production fails closed when the authentication provider is unconfigured", () => {
+  assert.throws(
+    () => assertProductionAuthenticationConfigured("production", unconfiguredAuthenticationAdapter),
+    /AUTH_PROVIDER_NOT_CONFIGURED/
+  );
+
+  const configuredAdapter: AuthenticationAdapter = {
+    async verifyCredential() {
+      return { provider: "test", subject: "subject" };
+    }
+  };
+
+  assert.doesNotThrow(() => assertProductionAuthenticationConfigured("production", configuredAdapter));
+  assert.doesNotThrow(() => assertProductionAuthenticationConfigured("development", unconfiguredAuthenticationAdapter));
 });
