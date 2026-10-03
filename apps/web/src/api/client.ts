@@ -11,13 +11,21 @@ export class ApiClient {
     private readonly getToken: () => string | null
   ) {}
 
+  private buildUrl(path: string): string {
+    const normalizedPath = path.replace(/^\/+/, "");
+    if (/^https?:\/\//i.test(this.baseUrl)) {
+      return new URL(normalizedPath, this.baseUrl.endsWith("/") ? this.baseUrl : `${this.baseUrl}/`).toString();
+    }
+    return `${this.baseUrl.replace(/\/+$/, "")}/${normalizedPath}`;
+  }
+
   async get<T>(path: string, init: RequestInit = {}): Promise<T> {
     const token = this.getToken();
     const headers = new Headers(init.headers);
     headers.set("Accept", "application/json");
     if (token) headers.set("Authorization", `Bearer ${token}`);
 
-    const response = await fetch(new URL(path.replace(/^\\//, ""), this.baseUrl.endsWith("/") ? this.baseUrl : `${this.baseUrl}/`).toString(), {
+    const response = await fetch(this.buildUrl(path), {
       ...init,
       method: "GET",
       headers
