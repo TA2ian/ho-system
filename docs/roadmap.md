@@ -79,7 +79,7 @@
 - Concurrency tests — simultaneous open collection sessions for one driver are rejected by a database unique partial index and exercised in db:verify
 - Idempotency tests — canonical request hashing and request-shape/type distinctions covered; end-to-end replay/race verification remains a follow-up
 - API pagination/error-contract regression tests — bounded pagination and authentication/error contract coverage established
-- Backup/restore verification — pending
+- Backup/restore verification — automated CI round-trip check added; pending first successful run
 
 ## Phase 8 — Production
 - Container images
