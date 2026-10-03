@@ -17,7 +17,7 @@ import { ApplicationError } from "./domain/errors.js";
 import { parsePaginationQuery } from "./application/pagination.js";
 import { createCatalogItem, createCatalogItemInputSchema, listCatalogCategories, listCatalogItems } from "./application/catalog/catalog-service.js";
 import { createSalesOrder, createSalesOrderInputSchema, getSalesOrder, listSalesOrders, transitionSalesOrder } from "./application/sales-orders/sales-order-service.js";
-import { createInvoiceFromSalesOrder, createInvoiceInputSchema, getInvoice, issueInvoice, voidInvoice, voidInvoiceInputSchema } from "./application/invoices/invoice-service.js";
+import { createInvoiceFromSalesOrder, createInvoiceInputSchema, getInvoice, issueInvoice, listInvoices, voidInvoice, voidInvoiceInputSchema } from "./application/invoices/invoice-service.js";
 import { allocatePayment, allocatePaymentInputSchema, createPayment, createPaymentInputSchema, getPayment, reversePayment, reversePaymentInputSchema } from "./application/payments/payment-service.js";
 import { addCollectionPayment, addCollectionPaymentInputSchema, closeCollection, closeCollectionInputSchema, getCollection, openCollection, openCollectionInputSchema } from "./application/driver-collections/collection-service.js";
 import { getInvoiceReceivable, listCustomerReceivables } from "./application/receivables/receivable-service.js";
@@ -396,6 +396,13 @@ export function buildApp(dependencies: {
 
   app.post<{ Params: { id: string } }>("/api/v1/sales-orders/:id/cancel", async (request, reply) => {
     return handleSalesOrderTransition(request, reply, "cancelled");
+  });
+
+  app.get("/api/v1/invoices", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "invoices.read");
+    const page = await listInvoices(dependencies.db, parsePaginationQuery(request.query));
+    return reply.send({ data: page.rows, meta: page.meta });
   });
 
   app.get<{ Params: { id: string } }>("/api/v1/invoices/:id", async (request, reply) => {
