@@ -105,7 +105,7 @@ export async function getCampaign(db: Database, campaignId: string, actorId: str
   return { campaign: row, spend: spend.rows, invoices: invoicesLinked, financialSnapshot: { spendTotal: spendTotal.toFixed(), estimatedProfit: estimatedProfit.toFixed(), estimatedPartnerShare: estimatedPartnerShare.toFixed() } };
 }
 
-export async function listCampaigns(db: Database, actorId: string, privileged: boolean, partnerUserId?: string, pagination: Pagination) {
+export async function listCampaigns(db: Database, actorId: string, privileged: boolean, pagination: Pagination, partnerUserId?: string) {
   const conditions = [];
   if (!privileged) conditions.push(eq(campaigns.partnerUserId, actorId));
   else if (partnerUserId) conditions.push(eq(campaigns.partnerUserId, partnerUserId));
