@@ -8,7 +8,8 @@ export type ApiError = {
 export class ApiClient {
   constructor(
     private readonly baseUrl: string,
-    private readonly getToken: () => string | null
+    private readonly getToken: () => string | null,
+    private readonly onUnauthorized?: () => void
   ) {}
 
   private buildUrl(path: string): string {
@@ -27,6 +28,9 @@ export class ApiClient {
     if (token) headers.set("Authorization", `Bearer ${token}`);
 
     const response = await fetch(this.buildUrl(path), { ...init, method, headers });
+    if (response.status === 401) {
+      this.onUnauthorized?.();
+    }
     if (!response.ok) throw await this.readError(response);
     return response.json() as Promise<T>;
   }
