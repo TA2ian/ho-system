@@ -53,7 +53,7 @@ export class ApiClient {
   }
 
   post<T>(path: string, body: unknown, idempotencyKey: string, init: RequestInit = {}): Promise<T> {
-    if (idempotencyKey.trim().length < 16) {
+    if (idempotencyKey.trim().length < 16 || idempotencyKey.length > 255) {
       throw new Error("IDEMPOTENCY_KEY_REQUIRED");
     }
     const headers = new Headers(init.headers);
