@@ -39,6 +39,19 @@ export class ApiClient {
     return this.request<T>("GET", path, init);
   }
 
+  put<T>(path: string, body: unknown, idempotencyKey: string, init: RequestInit = {}): Promise<T> {
+    if (idempotencyKey.trim().length < 16) {
+      throw new Error("IDEMPOTENCY_KEY_REQUIRED");
+    }
+    const headers = new Headers(init.headers);
+    headers.set("Idempotency-Key", idempotencyKey);
+    return this.request<T>("PUT", path, {
+      ...init,
+      headers,
+      body: JSON.stringify(body)
+    });
+  }
+
   post<T>(path: string, body: unknown, idempotencyKey: string, init: RequestInit = {}): Promise<T> {
     if (idempotencyKey.trim().length < 16) {
       throw new Error("IDEMPOTENCY_KEY_REQUIRED");
