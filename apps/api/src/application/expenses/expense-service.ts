@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { Database } from "../../db/client.js";
 import { expenses } from "../../db/expense-schema.js";
 import { ApplicationError } from "../../domain/errors.js";
+import { pageRows, type Pagination } from "../pagination.js";
 import { recordAuditEvent } from "../audit.js";
 import { postExpenseRecorded, postExpenseVoided } from "../accounting/accounting-posting-service.js";
 
@@ -31,7 +32,11 @@ export async function createExpense(db:Database,input:z.infer<typeof createExpen
   await recordAuditEvent(db,{actorId:context.actorId,action:"expense.recorded",resourceType:"expense",resourceId:row.id,requestId:context.requestId,idempotencyKey:context.idempotencyKey,metadata:{amount:input.amount,currencyCode:input.currencyCode,paymentMethod:input.paymentMethod,category:input.category}});
   return row;
 }
-export async function listExpenses(db:Database){return db.select().from(expenses).where(eq(expenses.status,"recorded")).orderBy(asc(expenses.incurredAt));}
+export async function listExpenses(db:Database, pagination: Pagination){
+  const rows=await db.select().from(expenses).where(eq(expenses.status,"recorded"))
+    .orderBy(asc(expenses.incurredAt)).limit(pagination.limit + 1).offset(pagination.offset);
+  return pageRows(rows, pagination);
+}
 export async function voidExpense(db:Database,expenseId:string,input:z.infer<typeof voidExpenseInputSchema>,context:{actorId:string;requestId:string;idempotencyKey:string}){
   const [row]=await db.select().from(expenses).where(eq(expenses.id,expenseId)).limit(1);
   if(!row)throw new ApplicationError("EXPENSE_NOT_FOUND",404,"المصروف غير موجود");
