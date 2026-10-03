@@ -8,6 +8,7 @@ import { roles, userRoles, users } from "../../db/schema.js";
 import { ApplicationError } from "../../domain/errors.js";
 import { deliveryStatusSchema, deliveryTypeSchema } from "../../domain/delivery.js";
 import { recordAuditEvent } from "../audit.js";
+import { pageRows, type Pagination } from "../pagination.js";
 import { getInvoiceReceivable } from "../receivables/receivable-service.js";
 import { allocatePayment, createPayment, createPaymentInputSchema } from "../payments/payment-service.js";
 
@@ -96,7 +97,7 @@ export async function getDeliveryOrder(db: Database, deliveryOrderId: string, ac
   return { deliveryOrder: row, receivable };
 }
 
-export async function listDeliveryOrders(db: Database, actorId: string, privileged: boolean, filters: { driverUserId?: string; status?: string }) {
+export async function listDeliveryOrders(db: Database, actorId: string, privileged: boolean, filters: { driverUserId?: string; status?: string }, pagination: Pagination) {
   const conditions = [];
   if (!privileged) conditions.push(eq(deliveryOrders.assignedDriverId, actorId));
   else if (filters.driverUserId) {
@@ -108,7 +109,8 @@ export async function listDeliveryOrders(db: Database, actorId: string, privileg
     if (!parsed.success) throw new ApplicationError("DELIVERY_STATUS_INVALID", 400, "حالة طلب التوصيل غير صالحة");
     conditions.push(eq(deliveryOrders.status, parsed.data));
   }
-  return db.select().from(deliveryOrders).where(conditions.length ? and(...conditions) : undefined).orderBy(asc(deliveryOrders.createdAt));
+  const rows = await db.select().from(deliveryOrders).where(conditions.length ? and(...conditions) : undefined).orderBy(asc(deliveryOrders.createdAt)).limit(pagination.limit + 1).offset(pagination.offset);
+  return pageRows(rows, pagination);
 }
 
 export async function assignDeliveryOrder(db: Database, deliveryOrderId: string, input: z.infer<typeof assignDeliveryOrderInputSchema>, context: { actorId: string; requestId: string; idempotencyKey: string }) {
