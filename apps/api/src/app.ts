@@ -21,7 +21,7 @@ import { allocatePayment, allocatePaymentInputSchema, createPayment, createPayme
 import { addCollectionPayment, addCollectionPaymentInputSchema, closeCollection, closeCollectionInputSchema, getCollection, openCollection, openCollectionInputSchema } from "./application/driver-collections/collection-service.js";
 import { getInvoiceReceivable, listCustomerReceivables } from "./application/receivables/receivable-service.js";
 import { assignDeliveryOrder, assignDeliveryOrderInputSchema, createDeliveryOrder, createDeliveryOrderInputSchema, getDeliveryOrder, listDeliveryOrders, recordDeliveryCollection, deliveryCollectionInputSchema, transitionDeliveryOrder, transitionDeliveryOrderInputSchema } from "./application/delivery/delivery-service.js";
-import { campaignStatusInputSchema, createCampaign, createCampaignInputSchema, getCampaign, linkCampaignInvoice, linkCampaignInvoiceInputSchema, listCampaigns, recordCampaignSpend, recordCampaignSpendInputSchema, transitionCampaign } from "./application/campaigns/campaign-service.js";
+import { campaignStatusInputSchema, createCampaign, createCampaignInputSchema, getCampaign, linkCampaignInvoice, linkCampaignInvoiceInputSchema, listCampaigns, recordCampaignSpend, reverseCampaignSpendEntry, recordCampaignSpendInputSchema, reverseCampaignSpendInputSchema, transitionCampaign } from "./application/campaigns/campaign-service.js";
 import { completeEmployeeTask, createCompensationRule, createCompensationRuleInputSchema, createEmployeeTask, createEmployeeTaskInputSchema, listCompensationRules, listEmployeeTasks } from "./application/employees/employee-service.js";
 import { createExpense, createExpenseInputSchema, listExpenses, voidExpense, voidExpenseInputSchema } from "./application/expenses/expense-service.js";
 import { closePeriod, createAccount, createAccountInputSchema, createJournal, createJournalInputSchema, createPeriod, createPeriodInputSchema, createReversalInputSchema, getJournal, listAccounts, listPeriods, postJournal, reverseJournal } from "./application/accounting/accounting-service.js";
@@ -848,6 +848,34 @@ export function buildApp(dependencies: {
       const recorded=await recordCampaignSpend(tx,request.params.id,parsed.data,{actorId:request.principal!.userId,requestId:request.id,idempotencyKey:key},privileged);
       const body={data:recorded};await completeIdempotency(tx,idem.id,200,body);return {kind:"new" as const,status:200,body};
     });return reply.status(result.status).send(result.body);
+  });
+
+  app.post<{ Params: { id: string; spendId: string } }>("/api/v1/campaigns/:id/spend/:spendId/reverse", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "campaigns.spend");
+    if (!/^[0-9a-fA-F-]{36}$/.test(request.params.id) || !/^[0-9a-fA-F-]{36}$/.test(request.params.spendId)) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", message: "معرّف الحملة أو الإنفاق غير صالح" });
+    }
+    const parsed = reverseCampaignSpendInputSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "بيانات عكس الإنفاق غير صالحة", issues: parsed.error.flatten() });
+    const idempotencyKey = request.headers["idempotency-key"];
+    if (typeof idempotencyKey !== "string" || idempotencyKey.trim().length < 16 || idempotencyKey.length > 255) {
+      return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
+    }
+    const key = idempotencyKey.trim();
+    const scope = `campaign:spend-reverse:${request.params.id}:${request.params.spendId}:${request.principal.userId}`;
+    const requestHash = hashRequestBody(parsed.data);
+    const privileged = !request.principal.roles.has("advertiser");
+    const result = await withTransaction(dependencies.pool, async tx => {
+      const idem = await beginIdempotency(tx, scope, key, requestHash);
+      if (idem.kind === "replay") return idem;
+      if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
+      const reversed = await reverseCampaignSpendEntry(tx, request.params.id, request.params.spendId, parsed.data, { actorId: request.principal!.userId, requestId: request.id, idempotencyKey: key }, privileged);
+      const body = { data: reversed };
+      await completeIdempotency(tx, idem.id, 200, body);
+      return { kind: "new" as const, status: 200, body };
+    });
+    return reply.status(result.status).send(result.body);
   });
 
   app.post("/api/v1/delivery-orders", async (request, reply) => {
