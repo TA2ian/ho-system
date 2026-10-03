@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { migrateDatabase } from "./migrate.js";
 
@@ -136,6 +137,70 @@ try {
   const missingAccounts = requiredAccounts.filter((code) => !foundAccounts.has(code));
   if (missingAccounts.length > 0) {
     throw new Error(`Missing seeded chart-of-accounts entries: ${missingAccounts.join(", ")}`);
+  }
+
+  const indexResult = await pool.query<{ indexname: string }>(
+    `
+      SELECT indexname
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename = 'driver_collection_sessions'
+        AND indexname = 'driver_collection_open_driver_uq'
+    `
+  );
+  if (indexResult.rowCount !== 1) {
+    throw new Error("Missing unique open driver collection index");
+  }
+
+  const driverId = randomUUID();
+  const firstSessionId = randomUUID();
+  const secondSessionId = randomUUID();
+  await pool.query(
+    "INSERT INTO users (id, display_name, status) VALUES ($1, $2, 'active')",
+    [driverId, "Concurrency verification driver"]
+  );
+
+  const firstClient = await pool.connect();
+  const secondClient = await pool.connect();
+
+  try {
+    await firstClient.query("BEGIN");
+    await secondClient.query("BEGIN");
+    await firstClient.query(
+      "INSERT INTO driver_collection_sessions (id, driver_user_id, status, opened_by) VALUES ($1, $2, 'open', $2)",
+      [firstSessionId, driverId]
+    );
+
+    const secondInsert = secondClient.query(
+      "INSERT INTO driver_collection_sessions (id, driver_user_id, status, opened_by) VALUES ($1, $2, 'open', $2)",
+      [secondSessionId, driverId]
+    );
+
+    await firstClient.query("COMMIT");
+
+    try {
+      await secondInsert;
+      throw new Error("Expected concurrent duplicate open-session insert to fail");
+    } catch (error) {
+      if (
+        typeof error !== "object" ||
+        error === null ||
+        !("code" in error) ||
+        (error as { code?: string }).code !== "23505"
+      ) {
+        throw error;
+      }
+    }
+
+    await secondClient.query("ROLLBACK");
+  } finally {
+    firstClient.release();
+    secondClient.release();
+    await pool.query(
+      "DELETE FROM driver_collection_sessions WHERE id IN ($1, $2)",
+      [firstSessionId, secondSessionId]
+    );
+    await pool.query("DELETE FROM users WHERE id = $1", [driverId]);
   }
 
   await migrateDatabase();
