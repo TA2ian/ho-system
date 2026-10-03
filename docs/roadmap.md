@@ -36,6 +36,7 @@
 ## Phase 4 — Business domains
 - Catalog
 - Sales orders — API lifecycle and frontend operational module implemented
+- Invoices — API listing and lifecycle already supported; frontend creation, issue/posting, and guarded void flow implemented
 - Invoices
 - Receivables
 - Payments
