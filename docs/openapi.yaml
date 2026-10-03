@@ -71,6 +71,13 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { $ref: '#/components/responses/Conflict' }
   /sales-orders:
+    get:
+      tags: [Sales Orders]
+      operationId: listSalesOrders
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
     post:
       tags: [Sales Orders]
       operationId: createSalesOrder
