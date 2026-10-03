@@ -41,6 +41,20 @@ async function getSession(db: Database, sessionId: string) {
   return session;
 }
 
+async function assertActiveDriver(db: Database, driverUserId: string) {
+  const result = await db.execute(sql`
+    SELECT u.id
+    FROM users u
+    JOIN user_roles ur ON ur.user_id = u.id
+    JOIN roles r ON r.id = ur.role_id
+    WHERE u.id = ${driverUserId}::uuid
+      AND u.status = 'active'
+      AND r.code = 'driver'
+    LIMIT 1
+  `);
+  if (!result.rows[0]) throw new ApplicationError("COLLECTION_DRIVER_NOT_ACTIVE", 403, "المستخدم ليس سائقاً فعالاً");
+}
+
 function assertDriverAccess(session: { driverUserId: string }, actorId: string): void {
   if (session.driverUserId !== actorId) {
     throw new ApplicationError("COLLECTION_DRIVER_MISMATCH", 403, "جلسة التحصيل تخص سائقاً آخر");
@@ -55,6 +69,7 @@ export async function openCollection(
   if (input.driverUserId !== context.actorId) {
     throw new ApplicationError("COLLECTION_DRIVER_MISMATCH", 403, "يمكن للسائق فتح جلسة التحصيل الخاصة به فقط");
   }
+  await assertActiveDriver(db, context.actorId);
 
   const existing = await db.select().from(driverCollectionSessions)
     .where(and(
