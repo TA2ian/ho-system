@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ApiClient } from "./api/client";
 import { clearSession, getSession, setSession } from "./auth/session";
+import { CustomersPage } from "./modules/customers/CustomersPage";
 import { SalesOrdersPage } from "./modules/sales-orders/SalesOrdersPage";
 import { InvoicesPage } from "./modules/invoices/InvoicesPage";
 import { ReceivablesPage } from "./modules/receivables/ReceivablesPage";
@@ -68,7 +69,7 @@ export function App() {
       {active === "dashboard" ? (
         <Dashboard api={api} />
       ) : active === "customers" ? (
-        <Customers api={api} />
+        <CustomersPage api={api} />
       ) : active === "sales" ? (
         <SalesOrdersPage api={api} />
       ) : active === "invoices" ? (
@@ -135,170 +136,6 @@ function Dashboard({ api }: { api: ApiClient }) {
           <li>حسابات المبالغ والقيود المالية قطعية في الـ API وقاعدة البيانات.</li>
           <li>الواجهة لا تتجاوز حدود الصلاحيات وقواعد التحقق المقررة على الخادم.</li>
         </ul>
-      </section>
-    </div>
-  );
-}
-
-function Customers({ api }: { api: ApiClient }) {
-  const limit = 25;
-  const [page, setPage] = useState<Page<Customer> | null>(null);
-  const [offset, setOffset] = useState(0);
-  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [type, setType] = useState<"individual" | "business">("individual");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [creating, setCreating] = useState(false);
-
-  async function load(nextOffset = offset) {
-    setState("loading");
-    setError(null);
-    try {
-      setPage(await api.get<Page<Customer>>(`customers?limit=${limit}&offset=${nextOffset}`));
-      setOffset(nextOffset);
-      setState("idle");
-    } catch (e) {
-      setState("error");
-      setError(e instanceof Error ? e.message : "تعذر تحميل العملاء.");
-    }
-  }
-
-  useEffect(() => {
-    void load(0);
-  }, []);
-
-  async function create() {
-    if (name.trim().length < 2) return setError("اسم العميل يجب أن يحتوي على حرفين على الأقل.");
-    setCreating(true);
-    setError(null);
-    try {
-      await api.post<Customer>(
-        "customers",
-        { type, displayName: name, phone: phone || null, email: email || null, notes: null },
-        crypto.randomUUID()
-      );
-      setName("");
-      setPhone("");
-      setEmail("");
-      setType("individual");
-      await load(offset);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "تعذر إنشاء العميل.");
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  return (
-    <div className="customers-page">
-      <section className="panel" style={{ marginBottom: "1.5rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-          <h2 style={{ fontSize: "1.125rem", fontWeight: 700 }}>إضافة عميل جديد</h2>
-          <button className="ho-btn ho-btn-secondary ho-btn-sm" type="button" onClick={() => void load(offset)} disabled={state === "loading"}>
-            تحديث القائمة
-          </button>
-        </div>
-
-        <div className="form-grid">
-          <div className="ho-form-field">
-            <label className="ho-label">الاسم</label>
-            <input className="ho-input" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} placeholder="اسم العميل أو المنشأة" />
-          </div>
-
-          <div className="ho-form-field">
-            <label className="ho-label">النوع</label>
-            <select className="ho-select" value={type} onChange={(e) => setType(e.target.value as typeof type)}>
-              <option value="individual">فرد</option>
-              <option value="business">منشأة</option>
-            </select>
-          </div>
-
-          <div className="ho-form-field">
-            <label className="ho-label">الهاتف</label>
-            <input className="ho-input" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={50} dir="ltr" placeholder="+963..." />
-          </div>
-
-          <div className="ho-form-field">
-            <label className="ho-label">البريد الإلكتروني</label>
-            <input className="ho-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={320} dir="ltr" placeholder="client@example.com" />
-          </div>
-        </div>
-
-        <div style={{ marginTop: "1rem" }}>
-          <button type="button" className="ho-btn ho-btn-primary" onClick={() => void create()} disabled={creating}>
-            {creating ? "جارٍ الإنشاء..." : "إضافة عميل"}
-          </button>
-        </div>
-
-        {error && <p className="error" role="alert" style={{ marginTop: "0.75rem" }}>{error}</p>}
-      </section>
-
-      <section className="panel">
-        <h2 style={{ fontSize: "1.125rem", fontWeight: 700, marginBottom: "1rem" }}>العملاء النشطون</h2>
-        {state === "loading" && <FeedbackState mode="loading" title="جارٍ تحميل سجل العملاء..." />}
-        {state === "error" && !page && (
-          <FeedbackState mode="error" title="تعذر تحميل سجل العملاء" message={error || undefined} onRetry={() => void load(offset)} />
-        )}
-        {page && (
-          <>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>الاسم</th>
-                    <th>النوع</th>
-                    <th>الهاتف</th>
-                    <th>البريد</th>
-                    <th>الحالة</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {page.data.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} style={{ textAlign: "center", padding: "2rem" }}>
-                        لا توجد نتائج مسجلة.
-                      </td>
-                    </tr>
-                  ) : (
-                    page.data.map((c) => (
-                      <tr key={c.id}>
-                        <td>{c.displayName}</td>
-                        <td>{c.type === "business" ? "منشأة" : "فرد"}</td>
-                        <td dir="ltr">{c.phone || "—"}</td>
-                        <td dir="ltr">{c.email || "—"}</td>
-                        <td>
-                          <StatusBadge status={c.status} />
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="pager">
-              <button
-                className="ho-btn ho-btn-secondary ho-btn-sm"
-                type="button"
-                disabled={offset === 0 || state === "loading"}
-                onClick={() => void load(Math.max(0, offset - limit))}
-              >
-                السابق
-              </button>
-              <span className="ho-pagination-info">الصفحة {Math.floor(offset / limit) + 1}</span>
-              <button
-                className="ho-btn ho-btn-secondary ho-btn-sm"
-                type="button"
-                disabled={!page.meta.hasMore || state === "loading"}
-                onClick={() => void load(offset + limit)}
-              >
-                التالي
-              </button>
-            </div>
-          </>
-        )}
       </section>
     </div>
   );
