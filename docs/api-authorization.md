@@ -34,6 +34,6 @@ All /api/v1/* routes require authentication before reaching their route handler.
 
 ## Fail-closed behavior
 
-Missing credentials, invalid credentials, inactive users, and missing permissions do not grant access. Permission checks are exact string matches. Resource scopes are exact scopeType:scopeId matches.
+Missing credentials, invalid credentials, inactive users, and missing permissions do not grant access. Authentication failures terminate the request pipeline before route handlers run. Authentication-provider failures are not silently converted into invalid-credential responses; infrastructure failures are allowed to reach the API error boundary. Permission checks are exact string matches. Resource scopes are exact scopeType:scopeId matches.
 
 This document describes the current foundation/v1 implementation; it does not claim that a concrete external identity provider has been configured. The runtime currently uses an explicit unconfigured authentication adapter until the production provider boundary is selected and wired.
