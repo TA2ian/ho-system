@@ -4,7 +4,7 @@ import helmet from "@fastify/helmet";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { config } from "./config.js";
-import { assertUserRateLimit } from "./security/rate-limit.js";
+import { createRateLimiter } from "./security/rate-limit.js";
 import { checkDatabaseHealth } from "./db/health.js";
 import type { Database } from "./db/client.js";
 import { withTransaction } from "./db/transaction.js";
@@ -33,6 +33,8 @@ export function buildApp(dependencies: {
   pool: Pool;
   authAdapter: AuthenticationAdapter;
 }) {
+  const rateLimiter = createRateLimiter(config.RATE_LIMIT_MAX_REQUESTS, config.RATE_LIMIT_WINDOW_SECONDS);
+
   const app = Fastify({
     logger: { level: config.NODE_ENV === "production" ? "info" : "debug" },
     disableRequestLogging: false,
@@ -52,7 +54,7 @@ export function buildApp(dependencies: {
 
     if (request.principal) {
       try {
-        assertUserRateLimit(request.principal.userId);
+        rateLimiter.assert(request.principal.userId);
       } catch (error) {
         if (error instanceof Error && error.message === "RATE_LIMITED") {
           return reply.status(429).send({
