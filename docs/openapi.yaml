@@ -44,6 +44,15 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /customers/{customerId}:
+    get:
+      tags: [Customers]
+      operationId: getCustomer
+      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }]
+      responses:
+        '200': { $ref: '#/components/responses/DataResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /customers/{customerId}/phones:
     get:
       tags: [Customers]
