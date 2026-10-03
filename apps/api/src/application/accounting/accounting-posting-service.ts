@@ -50,8 +50,21 @@ export async function reverseSourceJournal(
   if (entry.status !== "posted") throw new Error("Accounting journal is not posted for " + sourceEventKey);
   const existingReversal = await db.execute(sql`SELECT id FROM journal_entries WHERE reverses_entry_id = ${entry.id}::uuid LIMIT 1`);
   if (existingReversal.rows[0]) return String((existingReversal.rows[0] as { id: string }).id);
+
+  const openOriginalPeriod = await db.execute(sql`
+    SELECT 1
+    FROM accounting_periods
+    WHERE status = 'open'
+      AND period_start <= (SELECT entry_date FROM journal_entries WHERE id = ${entry.id}::uuid)
+      AND period_end >= (SELECT entry_date FROM journal_entries WHERE id = ${entry.id}::uuid)
+    LIMIT 1
+  `);
+  const reversalDate = openOriginalPeriod.rows[0]
+    ? String((await db.execute(sql`SELECT entry_date FROM journal_entries WHERE id = ${entry.id}::uuid`)).rows[0]?.entry_date)
+    : new Date().toISOString().slice(0, 10);
+
   return (await reverseJournal(db, entry.id, {
-    entryDate: new Date().toISOString().slice(0, 10),
+    entryDate: reversalDate,
     reason: "Operational reversal",
   }, context)).entry.id;
 }
