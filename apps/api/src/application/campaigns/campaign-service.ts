@@ -9,6 +9,7 @@ import { invoices } from "../../db/invoice-schema.js";
 import { roles, userRoles, users } from "../../db/schema.js";
 import { ApplicationError } from "../../domain/errors.js";
 import { recordAuditEvent } from "../audit.js";
+import { pageRows, type Pagination } from "../pagination.js";
 import { postCampaignSpendRecorded, reverseCampaignSpend } from "../accounting/accounting-posting-service.js";
 
 const uuidSchema = z.string().uuid();
@@ -104,11 +105,12 @@ export async function getCampaign(db: Database, campaignId: string, actorId: str
   return { campaign: row, spend: spend.rows, invoices: invoicesLinked, financialSnapshot: { spendTotal: spendTotal.toFixed(), estimatedProfit: estimatedProfit.toFixed(), estimatedPartnerShare: estimatedPartnerShare.toFixed() } };
 }
 
-export async function listCampaigns(db: Database, actorId: string, privileged: boolean, partnerUserId?: string) {
+export async function listCampaigns(db: Database, actorId: string, privileged: boolean, partnerUserId?: string, pagination: Pagination) {
   const conditions = [];
   if (!privileged) conditions.push(eq(campaigns.partnerUserId, actorId));
   else if (partnerUserId) conditions.push(eq(campaigns.partnerUserId, partnerUserId));
-  return db.select().from(campaigns).where(conditions.length ? and(...conditions) : undefined).orderBy(asc(campaigns.createdAt));
+  const rows = await db.select().from(campaigns).where(conditions.length ? and(...conditions) : undefined).orderBy(asc(campaigns.createdAt)).limit(pagination.limit + 1).offset(pagination.offset);
+  return pageRows(rows, pagination);
 }
 
 export async function transitionCampaign(db: Database, campaignId: string, input: z.infer<typeof campaignStatusInputSchema>, context: { actorId: string; requestId: string; idempotencyKey: string }, privileged: boolean) {
