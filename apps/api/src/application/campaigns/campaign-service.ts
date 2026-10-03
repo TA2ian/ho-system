@@ -89,9 +89,16 @@ export async function createCampaign(db: Database, input: z.infer<typeof createC
 
 export async function getCampaign(db: Database, campaignId: string, actorId: string, privileged: boolean) {
   const row = await assertCampaignAccess(db, campaignId, actorId, privileged) ?? await getCampaignRow(db, campaignId);
-  const spend = await db.execute(sql`\n    SELECT cse.*, (csr.id IS NOT NULL) AS reversed\n    FROM campaign_spend_entries cse\n    LEFT JOIN campaign_spend_reversals csr ON csr.spend_id = cse.id\n    WHERE cse.campaign_id = ${campaignId}::uuid\n    ORDER BY cse.spent_at ASC\n  `);
+  const spend = await db.execute(sql`
+    SELECT cse.*, (csr.id IS NOT NULL) AS reversed
+    FROM campaign_spend_entries cse
+    LEFT JOIN campaign_spend_reversals csr ON csr.spend_id = cse.id
+    WHERE cse.campaign_id = ${campaignId}::uuid
+    ORDER BY cse.spent_at ASC
+  `);
   const invoicesLinked = await db.select().from(campaignInvoices).where(eq(campaignInvoices.campaignId, campaignId)).orderBy(asc(campaignInvoices.createdAt));
-  const spendRows = spend.rows as Array<{ amount: string; reversed: boolean }>;\n  const spendTotal = spendRows.reduce((sum, item) => item.reversed ? sum : sum.add(new Decimal(item.amount)), new Decimal(0));
+  const spendRows = spend.rows as Array<{ amount: string; reversed: boolean }>;
+  const spendTotal = spendRows.reduce((sum, item) => item.reversed ? sum : sum.add(new Decimal(item.amount)), new Decimal(0));
   const estimatedProfit = new Decimal(row.grossAmount).sub(spendTotal);
   const estimatedPartnerShare = estimatedProfit.mul(new Decimal(row.partnerSharePercent)).div(100);
   return { campaign: row, spend: spend.rows, invoices: invoicesLinked, financialSnapshot: { spendTotal: spendTotal.toFixed(), estimatedProfit: estimatedProfit.toFixed(), estimatedPartnerShare: estimatedPartnerShare.toFixed() } };
