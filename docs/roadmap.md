@@ -36,10 +36,9 @@
 ## Phase 4 — Business domains
 - Catalog
 - Sales orders — API lifecycle and frontend operational module implemented
-- Invoices — API listing and lifecycle already supported; frontend creation, issue/posting, and guarded void flow implemented
-- Invoices
-- Receivables
-- Payments
+- Invoices — API listing and lifecycle supported; frontend creation, issue/posting, and guarded void flow implemented
+- Receivables — customer receivable listing with server-side payment-allocation/reversal-aware balance calculation and frontend module implemented
+- Payments — create, paginated listing, allocation, and reversal flows with accounting posting/reversal and frontend module implemented
 - Campaigns and advertising partner scopes
 - Delivery and driver workflows
 - Driver collection sessions and manual settlement
@@ -64,6 +63,9 @@
 - API integration — transport boundary established with bearer authentication and idempotency-aware POST support
 - Customer module — active customer listing and creation flow implemented
 - Sales orders module — customer/catalog-backed creation, paginated listing, confirmation, and cancellation implemented
+- Invoices module — creation from confirmed orders, paginated listing, issue/posting, and guarded void implemented
+- Receivables module — customer invoice balances and allocation-aware outstanding amounts implemented
+- Payments module — recording, paginated listing, allocation, and reversal UI implemented
 - Firebase Hosting configuration added
 - Web typecheck/build/audit added to CI and verified successfully
 
