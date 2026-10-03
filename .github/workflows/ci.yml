@@ -121,6 +121,10 @@ jobs:
 
           test "$restored_accounts" -ge 17
 
+          DATABASE_URL=postgresql://ho:test-password@localhost:5432/ho_network_restore \\
+          NODE_ENV=test \\
+            npm run db:verify
+
           psql \
             --host=localhost \
             --port=5432 \
