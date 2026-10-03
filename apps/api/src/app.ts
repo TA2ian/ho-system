@@ -14,6 +14,7 @@ import { assertPermission } from "./identity/auth.js";
 import type { AuthenticationAdapter } from "./identity/auth.js";
 import { authenticateRequest } from "./identity/middleware.js";
 import { ApplicationError } from "./domain/errors.js";
+import { parsePaginationQuery } from "./application/pagination.js";
 import { createCatalogItem, createCatalogItemInputSchema, listCatalogCategories, listCatalogItems } from "./application/catalog/catalog-service.js";
 import { createSalesOrder, createSalesOrderInputSchema, getSalesOrder, transitionSalesOrder } from "./application/sales-orders/sales-order-service.js";
 import { createInvoiceFromSalesOrder, createInvoiceInputSchema, getInvoice, issueInvoice, voidInvoice, voidInvoiceInputSchema } from "./application/invoices/invoice-service.js";
@@ -81,8 +82,8 @@ export function buildApp(dependencies: {
     });
 
     assertPermission(request.principal, "customers.read");
-    const customerRows = await listCustomers(dependencies.db);
-    return reply.send({ data: customerRows });
+    const page = await listCustomers(dependencies.db, parsePaginationQuery(request.query));
+    return reply.send({ data: page.rows, meta: page.meta });
   });
 
   app.post("/api/v1/customers", async (request, reply) => {
@@ -153,7 +154,8 @@ export function buildApp(dependencies: {
       message: "المصادقة مطلوبة"
     });
     assertPermission(request.principal, "catalog.read");
-    return reply.send({ data: await listCatalogCategories(dependencies.db) });
+    const page = await listCatalogCategories(dependencies.db, parsePaginationQuery(request.query));
+    return reply.send({ data: page.rows, meta: page.meta });
   });
 
   app.get("/api/v1/catalog/items", async (request, reply) => {
@@ -162,7 +164,8 @@ export function buildApp(dependencies: {
       message: "المصادقة مطلوبة"
     });
     assertPermission(request.principal, "catalog.read");
-    return reply.send({ data: await listCatalogItems(dependencies.db) });
+    const page = await listCatalogItems(dependencies.db, parsePaginationQuery(request.query));
+    return reply.send({ data: page.rows, meta: page.meta });
   });
 
   app.post("/api/v1/catalog/items", async (request, reply) => {
@@ -487,7 +490,8 @@ export function buildApp(dependencies: {
     if (!/^[0-9a-fA-F-]{36}$/.test(request.params.customerId)) {
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "معرّف العميل غير صالح" });
     }
-    return reply.send({ data: await listCustomerReceivables(dependencies.db, request.params.customerId) });
+    const page = await listCustomerReceivables(dependencies.db, request.params.customerId, parsePaginationQuery(request.query));
+    return reply.send({ data: page.rows, meta: page.meta });
   });
 
   app.get<{ Params: { id: string } }>("/api/v1/payments/:id", async (request, reply) => {
@@ -610,7 +614,8 @@ export function buildApp(dependencies: {
     const filters: { driverUserId?: string; status?: string } = {};
     if (query.driverUserId !== undefined) filters.driverUserId = query.driverUserId;
     if (query.status !== undefined) filters.status = query.status;
-    return reply.send({ data: await listDeliveryOrders(dependencies.db, request.principal.userId, privileged, filters) });
+    const page = await listDeliveryOrders(dependencies.db, request.principal.userId, privileged, filters, parsePaginationQuery(request.query));
+    return reply.send({ data: page.rows, meta: page.meta });
   });
 
   app.get<{ Params: { id: string } }>("/api/v1/delivery-orders/:id", async (request, reply) => {
@@ -676,7 +681,7 @@ export function buildApp(dependencies: {
   app.get("/api/v1/accounting/periods", async (request, reply) => {
     if (!request.principal) return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});
     assertPermission(request.principal,"accounting.journal.read");
-    return reply.send({data:await listPeriods(dependencies.db)});
+    const page = await listPeriods(dependencies.db, parsePaginationQuery(request.query)); return reply.send({data:page.rows,meta:page.meta});
   });
   app.post("/api/v1/accounting/periods", async (request, reply) => {
     if (!request.principal) return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});
@@ -694,7 +699,7 @@ export function buildApp(dependencies: {
     const result=await withTransaction(dependencies.pool,async tx=>{const idem=await beginIdempotency(tx,scope,idemKey,hash);if(idem.kind==="replay")return idem;if(idem.kind==="conflict")throw new ApplicationError(idem.reason==="KEY_REUSED"?"IDEMPOTENCY_KEY_REUSED":"IDEMPOTENCY_IN_PROGRESS",409,idem.reason==="KEY_REUSED"?"تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة":"الطلب نفسه قيد المعالجة");const closed=await closePeriod(tx,request.params.id,{actorId:request.principal!.userId,requestId:request.id,idempotencyKey:idemKey});const body={data:closed};await completeIdempotency(tx,idem.id,200,body);return {kind:"new" as const,status:200,body};});return reply.status(result.status).send(result.body);
   });
   app.get("/api/v1/accounting/accounts",async(request,reply)=>{
-    if(!request.principal)return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});assertPermission(request.principal,"accounting.journal.read");return reply.send({data:await listAccounts(dependencies.db)});
+    if(!request.principal)return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});assertPermission(request.principal,"accounting.journal.read");const page = await listAccounts(dependencies.db, parsePaginationQuery(request.query)); return reply.send({data:page.rows,meta:page.meta});
   });
   app.post("/api/v1/accounting/accounts",async(request,reply)=>{
     if(!request.principal)return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});assertPermission(request.principal,"accounting.accounts.manage");
@@ -733,7 +738,7 @@ export function buildApp(dependencies: {
   app.get("/api/v1/expenses", async (request, reply) => {
     if (!request.principal) return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});
     assertPermission(request.principal,"expenses.read");
-    return reply.send({data:await listExpenses(dependencies.db)});
+    const page = await listExpenses(dependencies.db, parsePaginationQuery(request.query)); return reply.send({data:page.rows,meta:page.meta});
   });
 
   app.post("/api/v1/expenses", async (request, reply) => {
@@ -761,7 +766,7 @@ export function buildApp(dependencies: {
     if (!request.principal) return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});
     assertPermission(request.principal,"compensation.read");
     const query=request.query as { employeeUserId?: string };
-    return reply.send({data:await listCompensationRules(dependencies.db,query.employeeUserId)});
+    const page = await listCompensationRules(dependencies.db,query.employeeUserId,parsePaginationQuery(request.query)); return reply.send({data:page.rows,meta:page.meta});
   });
 
   app.post("/api/v1/compensation-rules", async (request, reply) => {
@@ -779,7 +784,7 @@ export function buildApp(dependencies: {
     assertPermission(request.principal,"employee_tasks.read");
     const query=request.query as { employeeUserId?: string };
     const privileged=request.principal.permissions.has("employee_tasks.manage")&&!request.principal.roles.has("employee")&&!request.principal.roles.has("driver");
-    return reply.send({data:await listEmployeeTasks(dependencies.db,request.principal.userId,privileged,query.employeeUserId)});
+    const page = await listEmployeeTasks(dependencies.db,request.principal.userId,privileged,query.employeeUserId,parsePaginationQuery(request.query)); return reply.send({data:page.rows,meta:page.meta});
   });
 
   app.post("/api/v1/employee-tasks", async (request, reply) => {
@@ -808,7 +813,7 @@ export function buildApp(dependencies: {
     assertPermission(request.principal, "campaigns.read");
     const query = request.query as { partnerUserId?: string };
     const privileged = request.principal.permissions.has("campaigns.manage") && !request.principal.roles.has("advertiser");
-    return reply.send({ data: await listCampaigns(dependencies.db, request.principal.userId, privileged, query.partnerUserId) });
+    const page = await listCampaigns(dependencies.db, request.principal.userId, privileged, query.partnerUserId, parsePaginationQuery(request.query)); return reply.send({ data: page.rows, meta: page.meta });
   });
 
   app.get<{ Params: { id: string } }>("/api/v1/campaigns/:id", async (request, reply) => {
