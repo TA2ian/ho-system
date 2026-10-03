@@ -206,6 +206,43 @@ try {
     await pool.query("DELETE FROM users WHERE id = $1", [driverId]);
   }
 
+  const raceScope = `integration:idempotency-race:${randomUUID()}`;
+  const raceKey = `race-key-${randomUUID()}`;
+  const raceHash = "race-request-hash";
+  const raceFirstClient = await pool.connect();
+  const raceSecondClient = await pool.connect();
+
+  try {
+    await raceFirstClient.query("BEGIN");
+    await raceSecondClient.query("BEGIN");
+
+    const raceFirstDb = drizzle(raceFirstClient, { schema: allSchema });
+    const raceSecondDb = drizzle(raceSecondClient, { schema: allSchema });
+
+    const raceFirst = await beginIdempotency(raceFirstDb, raceScope, raceKey, raceHash);
+    if (raceFirst.kind !== "new") {
+      throw new Error(`Expected first concurrent idempotency attempt to be new, got ${raceFirst.kind}`);
+    }
+
+    const secondAttempt = beginIdempotency(raceSecondDb, raceScope, raceKey, raceHash);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await raceFirstClient.query("COMMIT");
+
+    const raceSecond = await secondAttempt;
+    if (raceSecond.kind !== "conflict" || raceSecond.reason !== "IN_PROGRESS") {
+      throw new Error("Expected concurrent duplicate idempotency attempt to be rejected as IN_PROGRESS");
+    }
+
+    await raceSecondClient.query("ROLLBACK");
+  } finally {
+    raceFirstClient.release();
+    raceSecondClient.release();
+    await pool.query(
+      "DELETE FROM idempotency_keys WHERE scope = $1 AND idempotency_key = $2",
+      [raceScope, raceKey]
+    );
+  }
+
   const idempotencyDb = drizzle(pool, { schema: allSchema });
   const idempotencyScope = `integration:idempotency:${randomUUID()}`;
   const idempotencyKey = `integration-key-${randomUUID()}`;
