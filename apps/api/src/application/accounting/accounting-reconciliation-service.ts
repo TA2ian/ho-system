@@ -57,7 +57,6 @@ export async function reconcileOperationalJournals(
            COUNT(*) OVER ()::int AS total_expected
     FROM expected e
     LEFT JOIN journal_entries je ON je.source_event_key = e.event_key
-    WHERE je.id IS NULL OR je.status <> 'posted'
     ORDER BY e.source_date, e.category, e.source_id
   \`);
 
@@ -99,15 +98,13 @@ export async function reconcileOperationalJournals(
     )
     SELECT er.category, er.source_id, er.source_date::text, er.event_key,
            original.id::text AS original_journal_entry_id,
+           original.status AS original_status,
            reversal.id::text AS reversal_journal_entry_id,
            reversal.status AS reversal_status,
            COUNT(*) OVER ()::int AS total_expected
     FROM expected_reversals er
     LEFT JOIN journal_entries original ON original.source_event_key = er.event_key
     LEFT JOIN journal_entries reversal ON reversal.reverses_entry_id = original.id
-    WHERE original.id IS NOT NULL
-      AND original.status = 'posted'
-      AND (reversal.id IS NULL OR reversal.status <> 'posted')
     ORDER BY er.source_date, er.category, er.source_id
   \`);
 
@@ -122,14 +119,16 @@ export async function reconcileOperationalJournals(
     status: string | null;
     total_expected: number;
   }>) {
-    issues.push({
-      category: row.category,
-      issue: row.journal_entry_id === null ? "missing_posting" : "unposted_posting",
+    if (row.journal_entry_id === null || row.status !== "posted") {
+      issues.push({
+        category: row.category,
+        issue: row.journal_entry_id === null ? "missing_posting" : "unposted_posting",
       sourceId: row.source_id,
       expectedEventKey: row.event_key,
       sourceDate: row.source_date,
-      journalEntryId: row.journal_entry_id
-    });
+        journalEntryId: row.journal_entry_id
+      });
+    }
   }
 
   for (const row of reversalRows.rows as Array<{
@@ -138,18 +137,22 @@ export async function reconcileOperationalJournals(
     source_date: string;
     event_key: string;
     original_journal_entry_id: string | null;
+    original_status: string | null;
     reversal_journal_entry_id: string | null;
     reversal_status: string | null;
     total_expected: number;
   }>) {
-    issues.push({
-      category: row.category,
-      issue: "missing_reversal",
+    if (row.original_journal_entry_id && row.original_status === "posted" &&
+        (!row.reversal_journal_entry_id || row.reversal_status !== "posted")) {
+      issues.push({
+        category: row.category,
+        issue: "missing_reversal",
       sourceId: row.source_id,
       expectedEventKey: row.event_key,
       sourceDate: row.source_date,
-      journalEntryId: row.reversal_journal_entry_id ?? row.original_journal_entry_id
-    });
+        journalEntryId: row.reversal_journal_entry_id ?? row.original_journal_entry_id
+      });
+    }
   }
 
   const postingSample = postingRows.rows[0] as { total_expected?: number } | undefined;
