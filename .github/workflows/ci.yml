@@ -69,6 +69,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm --network host \
+            --user "$(id -u):$(id -g)" \
             -e PGPASSWORD="$PGPASSWORD" \
             -v /tmp:/tmp \
             postgres:17-alpine \
