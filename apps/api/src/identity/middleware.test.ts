@@ -33,7 +33,7 @@ test("authentication rejects missing credentials and stops the pipeline", async 
   const reply = replyRecorder();
 
   const authenticated = await authenticateRequest(
-    request(),
+      request() as never,
     reply as never,
     { db: {} as never, adapter }
   );
@@ -53,7 +53,7 @@ test("invalid credentials become 401 without hiding infrastructure failures", as
 
   assert.equal(
     await authenticateRequest(
-      request({ authorization: "Bearer invalid" }),
+      request({ authorization: "Bearer invalid" }) as never,
       invalidReply as never,
       { db: {} as never, adapter: invalidAdapter }
     ),
@@ -71,7 +71,7 @@ test("invalid credentials become 401 without hiding infrastructure failures", as
 
   await assert.rejects(
     authenticateRequest(
-      request({ authorization: "Bearer credential" }),
+      request({ authorization: "Bearer credential" }) as never,
       failingReply as never,
       { db: {} as never, adapter: failingAdapter }
     ),
@@ -117,7 +117,7 @@ test("unknown identities return 401", async () => {
 
   assert.equal(
     await authenticateRequest(
-      request({ authorization: "Bearer credential" }),
+      request({ authorization: "Bearer credential" }) as never,
       reply as never,
       { db: db as never, adapter }
     ),
