@@ -18,7 +18,7 @@ import { parsePaginationQuery } from "./application/pagination.js";
 import { createCatalogItem, createCatalogItemInputSchema, listCatalogCategories, listCatalogItems } from "./application/catalog/catalog-service.js";
 import { createSalesOrder, createSalesOrderInputSchema, getSalesOrder, listSalesOrders, transitionSalesOrder } from "./application/sales-orders/sales-order-service.js";
 import { createInvoiceFromSalesOrder, createInvoiceInputSchema, getInvoice, issueInvoice, listInvoices, voidInvoice, voidInvoiceInputSchema } from "./application/invoices/invoice-service.js";
-import { allocatePayment, allocatePaymentInputSchema, createPayment, createPaymentInputSchema, getPayment, reversePayment, reversePaymentInputSchema } from "./application/payments/payment-service.js";
+import { allocatePayment, allocatePaymentInputSchema, createPayment, createPaymentInputSchema, getPayment, listPayments, reversePayment, reversePaymentInputSchema } from "./application/payments/payment-service.js";
 import { addCollectionPayment, addCollectionPaymentInputSchema, closeCollection, closeCollectionInputSchema, getCollection, openCollection, openCollectionInputSchema } from "./application/driver-collections/collection-service.js";
 import { getInvoiceReceivable, listCustomerReceivables } from "./application/receivables/receivable-service.js";
 import { assignDeliveryOrder, assignDeliveryOrderInputSchema, createDeliveryOrder, createDeliveryOrderInputSchema, getDeliveryOrder, listDeliveryOrders, recordDeliveryCollection, deliveryCollectionInputSchema, transitionDeliveryOrder, transitionDeliveryOrderInputSchema } from "./application/delivery/delivery-service.js";
@@ -515,6 +515,13 @@ export function buildApp(dependencies: {
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "معرّف العميل غير صالح" });
     }
     const page = await listCustomerReceivables(dependencies.db, request.params.customerId, parsePaginationQuery(request.query));
+    return reply.send({ data: page.rows, meta: page.meta });
+  });
+
+  app.get("/api/v1/payments", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "payments.read");
+    const page = await listPayments(dependencies.db, parsePaginationQuery(request.query));
     return reply.send({ data: page.rows, meta: page.meta });
   });
 
