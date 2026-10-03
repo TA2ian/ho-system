@@ -32,3 +32,16 @@ test("rate limiter reset clears all buckets", () => {
   limiter.reset();
   limiter.assert("user-1");
 });
+
+
+test("rate limiter rejects blank keys", () => {
+  const limiter = createRateLimiter(1, 60);
+  assert.throws(() => limiter.assert("   "), /RATE_LIMIT_KEY_REQUIRED/);
+});
+
+test("rate limiter can be reset", () => {
+  const limiter = createRateLimiter(1, 60);
+  limiter.assert("user-1");
+  limiter.reset();
+  assert.doesNotThrow(() => limiter.assert("user-1"));
+});
