@@ -151,7 +151,7 @@ export async function addCollectionPayment(
     resourceId: sessionId,
     requestId: context.requestId,
     idempotencyKey: context.idempotencyKey,
-    metadata: { deliveryOrderId: input.deliveryOrderId, paymentId: created.paymentId }
+    metadata: { deliveryOrderId: input.deliveryOrderId, paymentId: created.collectionPayment.paymentId }
   });
 
   return created;
