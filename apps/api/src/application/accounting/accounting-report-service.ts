@@ -52,20 +52,47 @@ export async function incomeStatement(db:Database,startDate:string,endDate:strin
     GROUP BY coa.id,coa.code,coa.name,coa.account_type,coa.normal_balance
     ORDER BY coa.account_type,coa.code
   `);
-  const accounts=rows.rows;
-  const revenue=accounts.filter((row)=>row.account_type==='revenue');
-  const expense=accounts.filter((row)=>row.account_type==='expense');
-  const sum=(items:typeof accounts)=>items.reduce((total,row)=>total+Number(row.balance),0);
-  const totalRevenue=sum(revenue);
-  const totalExpenses=sum(expense);
+  const totals=await db.execute(sql`
+    SELECT
+      COALESCE(SUM(CASE WHEN coa.account_type='revenue' THEN
+        CASE WHEN coa.normal_balance='credit' THEN jl.base_credit_amount-jl.base_debit_amount ELSE jl.base_debit_amount-jl.base_credit_amount END
+        ELSE 0 END),0)::text AS revenue,
+      COALESCE(SUM(CASE WHEN coa.account_type='expense' THEN
+        CASE WHEN coa.normal_balance='credit' THEN jl.base_credit_amount-jl.base_debit_amount ELSE jl.base_debit_amount-jl.base_credit_amount END
+        ELSE 0 END),0)::text AS expenses
+    FROM journal_lines jl
+    JOIN journal_entries je ON je.id=jl.journal_entry_id
+    JOIN chart_of_accounts coa ON coa.id=jl.account_id
+    WHERE je.status='posted'
+      AND je.entry_date BETWEEN ${startDate} AND ${endDate}
+      AND coa.is_active=true
+      AND coa.account_type IN ('revenue','expense')
+  `);
+  const totalRow=totals.rows[0] as {revenue:string;expenses:string};
+  const netIncome=await db.execute(sql`
+    SELECT (
+      COALESCE(SUM(CASE WHEN coa.account_type='revenue'
+        THEN CASE WHEN coa.normal_balance='credit' THEN jl.base_credit_amount-jl.base_debit_amount ELSE jl.base_debit_amount-jl.base_credit_amount END ELSE 0 END),0)
+      -
+      COALESCE(SUM(CASE WHEN coa.account_type='expense'
+        THEN CASE WHEN coa.normal_balance='credit' THEN jl.base_credit_amount-jl.base_debit_amount ELSE jl.base_debit_amount-jl.base_credit_amount END ELSE 0 END),0)
+    )::text AS net_income
+    FROM journal_lines jl
+    JOIN journal_entries je ON je.id=jl.journal_entry_id
+    JOIN chart_of_accounts coa ON coa.id=jl.account_id
+    WHERE je.status='posted'
+      AND je.entry_date BETWEEN ${startDate} AND ${endDate}
+      AND coa.is_active=true
+      AND coa.account_type IN ('revenue','expense')
+  `);
   return {
     startDate,
     endDate,
-    accounts,
+    accounts:rows.rows,
     totals:{
-      revenue:totalRevenue.toString(),
-      expenses:totalExpenses.toString(),
-      netIncome:(totalRevenue-totalExpenses).toString()
+      revenue:totalRow.revenue,
+      expenses:totalRow.expenses,
+      netIncome:(netIncome.rows[0] as {net_income:string}).net_income
     }
   };
 }
@@ -91,27 +118,61 @@ export async function balanceSheet(db:Database,asOfDate:string){
     GROUP BY coa.id,coa.code,coa.name,coa.account_type,coa.normal_balance
     ORDER BY coa.account_type,coa.code
   `);
-  const accounts=rows.rows;
-  const sumType=(type:string)=>accounts
-    .filter((row)=>row.account_type===type)
-    .reduce((total,row)=>total+Number(row.balance),0);
-  const assets=sumType('asset');
-  const liabilities=sumType('liability');
-  const equityAccounts=sumType('equity');
-
+  const totals=await db.execute(sql`
+    SELECT
+      COALESCE(SUM(CASE WHEN coa.account_type='asset' THEN
+        CASE WHEN coa.normal_balance='credit' THEN jl.base_credit_amount-jl.base_debit_amount ELSE jl.base_debit_amount-jl.base_credit_amount END ELSE 0 END),0)::text AS assets,
+      COALESCE(SUM(CASE WHEN coa.account_type='liability' THEN
+        CASE WHEN coa.normal_balance='credit' THEN jl.base_credit_amount-jl.base_debit_amount ELSE jl.base_debit_amount-jl.base_credit_amount END ELSE 0 END),0)::text AS liabilities,
+      COALESCE(SUM(CASE WHEN coa.account_type='equity' THEN
+        CASE WHEN coa.normal_balance='credit' THEN jl.base_credit_amount-jl.base_debit_amount ELSE jl.base_debit_amount-jl.base_credit_amount END ELSE 0 END),0)::text AS equity
+    FROM journal_lines jl
+    JOIN journal_entries je ON je.id=jl.journal_entry_id
+    JOIN chart_of_accounts coa ON coa.id=jl.account_id
+    WHERE je.status='posted'
+      AND je.entry_date<=${asOfDate}
+      AND coa.is_active=true
+      AND coa.account_type IN ('asset','liability','equity')
+  `);
+  const totalRow=totals.rows[0] as {assets:string;liabilities:string;equity:string};
   const income=await incomeStatement(db,'0001-01-01',asOfDate);
-  const currentNetIncome=Number(income.totals.netIncome);
-  const totalEquity=equityAccounts+currentNetIncome;
+  const currentPeriodNetIncome=income.totals.netIncome;
+  const check=await db.execute(sql`
+    SELECT (
+      COALESCE(SUM(CASE WHEN coa.account_type='asset' THEN
+        CASE WHEN coa.normal_balance='credit' THEN jl.base_credit_amount-jl.base_debit_amount ELSE jl.base_debit_amount-jl.base_credit_amount END ELSE 0 END),0)
+      -
+      COALESCE(SUM(CASE WHEN coa.account_type='liability' THEN
+        CASE WHEN coa.normal_balance='credit' THEN jl.base_credit_amount-jl.base_debit_amount ELSE jl.base_debit_amount-jl.base_credit_amount END ELSE 0 END),0)
+      -
+      COALESCE(SUM(CASE WHEN coa.account_type='equity' THEN
+        CASE WHEN coa.normal_balance='credit' THEN jl.base_credit_amount-jl.base_debit_amount ELSE jl.base_debit_amount-jl.base_credit_amount END ELSE 0 END),0)
+      -
+      (
+        COALESCE(SUM(CASE WHEN coa.account_type='revenue' THEN
+          CASE WHEN coa.normal_balance='credit' THEN jl.base_credit_amount-jl.base_debit_amount ELSE jl.base_debit_amount-jl.base_credit_amount END ELSE 0 END),0)
+        -
+        COALESCE(SUM(CASE WHEN coa.account_type='expense' THEN
+          CASE WHEN coa.normal_balance='credit' THEN jl.base_credit_amount-jl.base_debit_amount ELSE jl.base_debit_amount-jl.base_credit_amount END ELSE 0 END),0)
+      )
+    )::text AS balance_check
+    FROM journal_lines jl
+    JOIN journal_entries je ON je.id=jl.journal_entry_id
+    JOIN chart_of_accounts coa ON coa.id=jl.account_id
+    WHERE je.status='posted'
+      AND je.entry_date<=${asOfDate}
+      AND coa.is_active=true
+  `);
+  const balanceCheck=(check.rows[0] as {balance_check:string}).balance_check;
   return {
     asOfDate,
-    accounts,
+    accounts:rows.rows,
     totals:{
-      assets:assets.toString(),
-      liabilities:liabilities.toString(),
-      equity:totalEquity.toString(),
-      currentPeriodNetIncome:currentNetIncome.toString(),
-      liabilitiesAndEquity:(liabilities+totalEquity).toString(),
-      balanceCheck:(assets-(liabilities+totalEquity)).toString()
+      assets:totalRow.assets,
+      liabilities:totalRow.liabilities,
+      equity:totalRow.equity,
+      currentPeriodNetIncome,
+      balanceCheck
     }
   };
 }
