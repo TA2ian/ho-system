@@ -813,7 +813,7 @@ export function buildApp(dependencies: {
     assertPermission(request.principal, "campaigns.read");
     const query = request.query as { partnerUserId?: string };
     const privileged = request.principal.permissions.has("campaigns.manage") && !request.principal.roles.has("advertiser");
-    const page = await listCampaigns(dependencies.db, request.principal.userId, privileged, query.partnerUserId, parsePaginationQuery(request.query)); return reply.send({ data: page.rows, meta: page.meta });
+    const page = await listCampaigns(dependencies.db, request.principal.userId, privileged, parsePaginationQuery(request.query), query.partnerUserId); return reply.send({ data: page.rows, meta: page.meta });
   });
 
   app.get<{ Params: { id: string } }>("/api/v1/campaigns/:id", async (request, reply) => {
