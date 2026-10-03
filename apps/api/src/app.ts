@@ -647,7 +647,7 @@ export function buildApp(dependencies: {
     if (!request.principal) return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});
     assertPermission(request.principal,"accounting.journal.read");
     const q=request.query as {startDate?:string;endDate?:string};
-    if (!q.startDate || !q.endDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(q.startDate) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(q.endDate) || q.endDate < q.startDate) {
+    if (!q.startDate || !q.endDate || !/^\d{4}-\d{2}-\d{2}$/.test(q.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(q.endDate) || q.endDate < q.startDate) {
       return reply.status(400).send({error:"VALIDATION_ERROR",message:"يجب تحديد نطاق تاريخ صحيح"});
     }
     return reply.send({data:await incomeStatement(dependencies.db,q.startDate,q.endDate)});
@@ -657,7 +657,7 @@ export function buildApp(dependencies: {
     if (!request.principal) return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});
     assertPermission(request.principal,"accounting.journal.read");
     const q=request.query as {asOfDate?:string};
-    if (!q.asOfDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(q.asOfDate)) {
+    if (!q.asOfDate || !/^\d{4}-\d{2}-\d{2}$/.test(q.asOfDate)) {
       return reply.status(400).send({error:"VALIDATION_ERROR",message:"يجب تحديد تاريخ صحيح"});
     }
     return reply.send({data:await balanceSheet(dependencies.db,q.asOfDate)});
