@@ -34,7 +34,8 @@ export function buildApp(dependencies: {
 }) {
   const app = Fastify({
     logger: { level: config.NODE_ENV === "production" ? "info" : "debug" },
-    disableRequestLogging: false
+    disableRequestLogging: false,
+    bodyLimit: config.REQUEST_BODY_LIMIT_BYTES
   });
 
   app.register(helmet);
