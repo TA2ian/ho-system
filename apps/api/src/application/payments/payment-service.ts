@@ -10,6 +10,7 @@ import { paymentAllocationReversals } from "../../db/payment-reversal-schema.js"
 import { ApplicationError } from "../../domain/errors.js";
 import type { Payment, PaymentAllocation, PaymentMethod, PaymentStatus } from "../../domain/payment.js";
 import { recordAuditEvent } from "../audit.js";
+import { pageRows, type Pagination } from "../pagination.js";
 import { postPaymentAllocated, postPaymentRecorded, reversePaymentAllocation, reversePaymentRecorded } from "../accounting/accounting-posting-service.js";
 
 const dateTimeSchema = z.string().datetime({ offset: true });
@@ -90,6 +91,16 @@ export async function createPayment(
   });
 
   return { payment: toPayment(payment), allocations: [] };
+}
+
+
+export async function listPayments(db: Database, pagination: Pagination) {
+  const rows = await db.select().from(payments)
+    .orderBy(sql`payments.created_at DESC, payments.payment_number DESC`)
+    .limit(pagination.limit + 1)
+    .offset(pagination.offset);
+
+  return pageRows(rows.map(toPayment), pagination);
 }
 
 export async function getPayment(db: Database, paymentId: string): Promise<{ payment: Payment; allocations: PaymentAllocation[] }> {
