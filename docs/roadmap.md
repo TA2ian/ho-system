@@ -48,7 +48,7 @@
 - Financial posting rules
 - Reversal rules
 - Period controls
-- Reconciliation
+- Reconciliation — operational-to-posted-journal consistency report implemented
 - Reporting read models
 
 ## Phase 6 — Arabic PWA
