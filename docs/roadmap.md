@@ -35,7 +35,7 @@
 
 ## Phase 4 — Business domains
 - Catalog
-- Sales orders
+- Sales orders — API lifecycle and frontend operational module implemented
 - Invoices
 - Receivables
 - Payments
@@ -61,6 +61,8 @@
 - Responsive layouts — foundation established
 - Offline-safe shell — static shell only; API responses are not cached
 - API integration — transport boundary established with bearer authentication and idempotency-aware POST support
+- Customer module — active customer listing and creation flow implemented
+- Sales orders module — customer/catalog-backed creation, paginated listing, confirmation, and cancellation implemented
 - Firebase Hosting configuration added
 - Web typecheck/build/audit added to CI and verified successfully
 
