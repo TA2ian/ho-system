@@ -429,6 +429,20 @@ paths:
       parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { $ref: '#/components/requestBodies/JsonObject' }
       responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /customers/{customerId}/business-profile:
+    get:
+      tags: [Customers]
+      operationId: getCustomerBusinessProfile
+      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    put:
+      tags: [Customers]
+      operationId: upsertCustomerBusinessProfile
+      parameters:
+        - $ref: '#/components/parameters/UuidCustomerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
   /media-agreements:
     get:
       tags: [Customers]
