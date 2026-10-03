@@ -25,7 +25,6 @@ type Invoice = {
   notes: string | null;
   createdAt: string;
 };
-type InvoiceDetail = { invoice: Invoice; lines: unknown[] };
 
 const statusLabels: Record<Invoice["status"], string> = {
   draft: "مسودة",
