@@ -8,7 +8,7 @@ import { createRateLimiter } from "./security/rate-limit.js";
 import { checkDatabaseHealth } from "./db/health.js";
 import type { Database } from "./db/client.js";
 import { withTransaction } from "./db/transaction.js";
-import { createCustomer, createCustomerInputSchema, listCustomers } from "./application/customers/customer-service.js";
+import { createCustomer, createCustomerInputSchema, getCustomer, listCustomers } from "./application/customers/customer-service.js";
 import { createCustomerPhone, createCustomerPhoneInputSchema, createCustomerAddress, createCustomerAddressInputSchema, createCustomerSocialAccount, createCustomerSocialAccountInputSchema, listCustomerPhones, listCustomerAddresses, listCustomerSocialAccounts } from "./application/customers/customer-360-service.js";
 import { createMediaAgreement, createMediaAgreementInputSchema, getMediaAgreement, listMediaAgreements } from "./application/media-agreements/media-agreement-service.js";
 import { getCustomerBusinessProfile, upsertCustomerBusinessProfile, upsertCustomerBusinessProfileInputSchema } from "./application/customers/customer-business-service.js";
