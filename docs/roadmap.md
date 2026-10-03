@@ -49,7 +49,8 @@
 - Reversal rules
 - Period controls
 - Reconciliation — operational-to-posted-journal consistency report implemented
-- Reporting read models
+- Reporting read models — trial balance, general ledger, reconciliation, income statement, and balance sheet implemented
+- OpenAPI foundation/v1 transport contract snapshot added
 
 ## Phase 6 — Arabic PWA
 - Preserve Arabic-first UX direction
