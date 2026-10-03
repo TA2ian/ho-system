@@ -1,0 +1,69 @@
+name: Container
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Validate production Compose
+        run: |
+          set -euo pipefail
+          cat > /tmp/ho-production.env <<'EOF'
+          API_IMAGE=ghcr.io/ta2ian/ho-system:test
+          API_DOMAIN=api.example.com
+          CORS_ORIGIN=https://app.example.com
+          POSTGRES_PASSWORD=validation-only-password
+          DATABASE_URL=postgresql://ho:validation-only-password@postgres:5432/ho_network
+          EOF
+          docker compose --env-file /tmp/ho-production.env -f deploy/docker-compose.production.yml config >/tmp/ho-compose-config.yml
+          test -s /tmp/ho-compose-config.yml
+
+      - name: Validate Caddy configuration
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -e API_DOMAIN=api.example.com \
+            -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2-alpine \
+            caddy validate --config /etc/caddy/Caddyfile
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

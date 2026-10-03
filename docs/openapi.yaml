@@ -1,0 +1,660 @@
+openapi: 3.1.0
+info:
+  title: HO Network API
+  version: 1.0.0-foundation
+  description: |
+    Contract snapshot for foundation/v1. The database and posted journal are authoritative.
+    Request payload validation remains implemented by the application's Zod schemas.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Customers
+  - name: Catalog
+  - name: Sales Orders
+  - name: Invoices
+  - name: Receivables
+  - name: Payments
+  - name: Delivery
+  - name: Exchange
+  - name: Accounting
+  - name: Expenses
+  - name: Employees
+  - name: Campaigns
+  - name: Driver Collections
+paths:
+  /customers:
+    get:
+      tags: [Customers]
+      operationId: listCustomers
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses:
+        '200': { $ref: '#/components/responses/DataResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Customers]
+      operationId: createCustomer
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses:
+        '201': { $ref: '#/components/responses/DataResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /customers/{customerId}:
+    get:
+      tags: [Customers]
+      operationId: getCustomer
+      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }]
+      responses:
+        '200': { $ref: '#/components/responses/DataResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /customers/{customerId}/phones:
+    get:
+      tags: [Customers]
+      operationId: listCustomerPhones
+      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }, { $ref: '#/components/parameters/PaginationLimit' }, { $ref: '#/components/parameters/PaginationOffset' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Customers]
+      operationId: createCustomerPhone
+      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /customers/{customerId}/addresses:
+    get:
+      tags: [Customers]
+      operationId: listCustomerAddresses
+      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }, { $ref: '#/components/parameters/PaginationLimit' }, { $ref: '#/components/parameters/PaginationOffset' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Customers]
+      operationId: createCustomerAddress
+      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /customers/{customerId}/social-accounts:
+    get:
+      tags: [Customers]
+      operationId: listCustomerSocialAccounts
+      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }, { $ref: '#/components/parameters/PaginationLimit' }, { $ref: '#/components/parameters/PaginationOffset' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Customers]
+      operationId: createCustomerSocialAccount
+      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /catalog/categories:
+    get:
+      tags: [Catalog]
+      operationId: listCatalogCategories
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /catalog/items:
+    get:
+      tags: [Catalog]
+      operationId: listCatalogItems
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Catalog]
+      operationId: createCatalogItem
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses:
+        '201': { $ref: '#/components/responses/DataResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /sales-orders:
+    get:
+      tags: [Sales Orders]
+      operationId: listSalesOrders
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Sales Orders]
+      operationId: createSalesOrder
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses:
+        '201': { $ref: '#/components/responses/DataResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /sales-orders/{id}:
+    get:
+      tags: [Sales Orders]
+      operationId: getSalesOrder
+      parameters: [{ $ref: '#/components/parameters/UuidId' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /sales-orders/{id}/confirm:
+    post:
+      tags: [Sales Orders]
+      operationId: confirmSalesOrder
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /sales-orders/{id}/cancel:
+    post:
+      tags: [Sales Orders]
+      operationId: cancelSalesOrder
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /invoices:
+    get:
+      tags: [Invoices]
+      operationId: listInvoices
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Invoices]
+      operationId: createInvoice
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /invoices/{id}:
+    get:
+      tags: [Invoices]
+      operationId: getInvoice
+      parameters: [{ $ref: '#/components/parameters/UuidId' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /invoices/{id}/issue:
+    post:
+      tags: [Invoices]
+      operationId: issueInvoice
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /invoices/{id}/void:
+    post:
+      tags: [Invoices]
+      operationId: voidInvoice
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /receivables/invoices/{id}:
+    get:
+      tags: [Receivables]
+      operationId: getInvoiceReceivable
+      parameters: [{ $ref: '#/components/parameters/UuidId' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /receivables/customers/{customerId}:
+    get:
+      tags: [Receivables]
+      operationId: listCustomerReceivables
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+        - $ref: '#/components/parameters/UuidCustomerId'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /payments:
+    get:
+      tags: [Payments]
+      operationId: listPayments
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Payments]
+      operationId: createPayment
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /payments/{id}:
+    get:
+      tags: [Payments]
+      operationId: getPayment
+      parameters: [{ $ref: '#/components/parameters/UuidId' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /payments/{id}/allocate:
+    post:
+      tags: [Payments]
+      operationId: allocatePayment
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /payments/{id}/reverse:
+    post:
+      tags: [Payments]
+      operationId: reversePayment
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /delivery-orders:
+    get:
+      tags: [Delivery]
+      operationId: listDeliveryOrders
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Delivery]
+      operationId: createDeliveryOrder
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /delivery-orders/{id}:
+    get:
+      tags: [Delivery]
+      operationId: getDeliveryOrder
+      parameters: [{ $ref: '#/components/parameters/UuidId' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /delivery-orders/{id}/assign:
+    post:
+      tags: [Delivery]
+      operationId: assignDeliveryOrder
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /delivery-orders/{id}/status:
+    post:
+      tags: [Delivery]
+      operationId: transitionDeliveryOrder
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /delivery-orders/{id}/collect:
+    post:
+      tags: [Delivery]
+      operationId: recordDeliveryCollection
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /exchange-rates:
+    get:
+      tags: [Exchange]
+      operationId: getLatestExchangeRate
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Exchange]
+      operationId: setExchangeRate
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /accounting/reports/trial-balance:
+    get:
+      tags: [Accounting]
+      operationId: trialBalance
+      parameters: [{ $ref: '#/components/parameters/AsOfDate' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /accounting/reports/ledger/{accountId}:
+    get:
+      tags: [Accounting]
+      operationId: generalLedger
+      parameters:
+        - $ref: '#/components/parameters/UuidAccountId'
+        - $ref: '#/components/parameters/StartDate'
+        - $ref: '#/components/parameters/EndDate'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /accounting/reports/income-statement:
+    get:
+      tags: [Accounting]
+      operationId: incomeStatement
+      parameters:
+        - $ref: '#/components/parameters/StartDate'
+        - $ref: '#/components/parameters/EndDate'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /accounting/reports/balance-sheet:
+    get:
+      tags: [Accounting]
+      operationId: balanceSheet
+      parameters: [{ $ref: '#/components/parameters/AsOfDate' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /accounting/reconciliation:
+    get:
+      tags: [Accounting]
+      operationId: reconcileOperationalJournals
+      parameters:
+        - $ref: '#/components/parameters/StartDate'
+        - $ref: '#/components/parameters/EndDate'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /accounting/periods:
+    get:
+      tags: [Accounting]
+      operationId: listAccountingPeriods
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Accounting]
+      operationId: createAccountingPeriod
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /accounting/periods/{id}/close:
+    post:
+      tags: [Accounting]
+      operationId: closeAccountingPeriod
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /accounting/accounts:
+    get:
+      tags: [Accounting]
+      operationId: listAccounts
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Accounting]
+      operationId: createAccount
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /accounting/journals/{id}:
+    get:
+      tags: [Accounting]
+      operationId: getJournal
+      parameters: [{ $ref: '#/components/parameters/UuidId' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /accounting/journals:
+    post:
+      tags: [Accounting]
+      operationId: createJournal
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /accounting/journals/{id}/post:
+    post:
+      tags: [Accounting]
+      operationId: postJournal
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /accounting/journals/{id}/reverse:
+    post:
+      tags: [Accounting]
+      operationId: reverseJournal
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /expenses:
+    get:
+      tags: [Expenses]
+      operationId: listExpenses
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Expenses]
+      operationId: createExpense
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /expenses/{id}/void:
+    post:
+      tags: [Expenses]
+      operationId: voidExpense
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /compensation-rules:
+    get:
+      tags: [Employees]
+      operationId: listCompensationRules
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Employees]
+      operationId: createCompensationRule
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /employee-tasks:
+    get:
+      tags: [Employees]
+      operationId: listEmployeeTasks
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Employees]
+      operationId: createEmployeeTask
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /employee-tasks/{id}/complete:
+    post:
+      tags: [Employees]
+      operationId: completeEmployeeTask
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /customers/{customerId}/business-profile:
+    get:
+      tags: [Customers]
+      operationId: getCustomerBusinessProfile
+      parameters: [{ $ref: '#/components/parameters/UuidCustomerId' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    put:
+      tags: [Customers]
+      operationId: upsertCustomerBusinessProfile
+      parameters:
+        - $ref: '#/components/parameters/UuidCustomerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /media-agreements:
+    get:
+      tags: [Customers]
+      operationId: listMediaAgreements
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+        - name: customerId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Customers]
+      operationId: createMediaAgreement
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /media-agreements/{id}:
+    get:
+      tags: [Customers]
+      operationId: getMediaAgreement
+      parameters: [{ $ref: '#/components/parameters/UuidId' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /campaigns:
+    get:
+      tags: [Campaigns]
+      operationId: listCampaigns
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+    post:
+      tags: [Campaigns]
+      operationId: createCampaign
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /campaigns/{id}:
+    get:
+      tags: [Campaigns]
+      operationId: getCampaign
+      parameters: [{ $ref: '#/components/parameters/UuidId' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /campaigns/{id}/status:
+    post:
+      tags: [Campaigns]
+      operationId: transitionCampaign
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /campaigns/{id}/invoices:
+    post:
+      tags: [Campaigns]
+      operationId: linkCampaignInvoice
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /campaigns/{id}/spend:
+    post:
+      tags: [Campaigns]
+      operationId: recordCampaignSpend
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /campaigns/{id}/spend/{spendId}/reverse:
+    post:
+      tags: [Campaigns]
+      operationId: reverseCampaignSpend
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+        - name: spendId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /driver-collections:
+    post:
+      tags: [Driver Collections]
+      operationId: openDriverCollection
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /driver-collections/{id}:
+    get:
+      tags: [Driver Collections]
+      operationId: getDriverCollection
+      parameters: [{ $ref: '#/components/parameters/UuidId' }]
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+  /driver-collections/{id}/payments:
+    post:
+      tags: [Driver Collections]
+      operationId: addDriverCollectionPayment
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '201': { $ref: '#/components/responses/DataResponse' } }
+  /driver-collections/{id}/close:
+    post:
+      tags: [Driver Collections]
+      operationId: closeDriverCollection
+      parameters: [{ $ref: '#/components/parameters/UuidId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/JsonObject' }
+      responses: { '200': { $ref: '#/components/responses/DataResponse' } }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 16, maxLength: 255 }
+    PaginationLimit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    PaginationOffset:
+      name: offset
+      in: query
+      required: false
+      schema: { type: integer, minimum: 0, maximum: 100000, default: 0 }
+    UuidId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UuidCustomerId:
+      name: customerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UuidAccountId:
+      name: accountId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AsOfDate:
+      name: asOfDate
+      in: query
+      required: true
+      schema: { type: string, format: date }
+    StartDate:
+      name: startDate
+      in: query
+      required: true
+      schema: { type: string, format: date }
+    EndDate:
+      name: endDate
+      in: query
+      required: true
+      schema: { type: string, format: date }
+  requestBodies:
+    JsonObject:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+  responses:
+    DataResponse:
+      description: Successful response. Payload is returned under data.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DataEnvelope'
+    Unauthorized:
+      description: Authentication required.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ValidationError:
+      description: Invalid request.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Conflict:
+      description: Conflict, including idempotency conflicts.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  schemas:
+    DataEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: {}
+        meta:
+          type: object
+          properties:
+            limit: { type: integer }
+            offset: { type: integer }
+            hasMore: { type: boolean }
+    ErrorEnvelope:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string }
+        message: { type: string }
+        issues: {}
+        retryAfterSeconds: { type: integer }

@@ -1,0 +1,1 @@
+Expenses API\n\nExpenses record operational outflows in USD or SYP. Payment method may be cash, Sham Cash, or unpaid. Recorded expenses are not deleted; voiding is an explicit state transition and is audited. General-ledger posting and reconciliation are intentionally handled by the accounting layer.

@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "foundation/**"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm audit --audit-level=high
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm audit --audit-level=high
+      - run: npm run typecheck
+      - run: npm run build
+
+  database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: ho_network
+          POSTGRES_USER: ho
+          POSTGRES_PASSWORD: test-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ho -d ho_network"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: npm install
+      - run: npm run db:verify
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://ho:test-password@localhost:5432/ho_network
+      - name: Backup and restore verification
+        env:
+          DATABASE_URL: postgresql://ho:test-password@localhost:5432/ho_network
+          PGPASSWORD: test-password
+        run: |
+          set -euo pipefail
+          docker run --rm --network host \
+            --user "$(id -u):$(id -g)" \
+            -e PGPASSWORD="$PGPASSWORD" \
+            -v /tmp:/tmp \
+            postgres:17-alpine \
+            pg_dump --format=custom --no-owner --no-acl \
+              --host=localhost --port=5432 --username=ho --dbname=ho_network \
+              --file=/tmp/ho-network-ci.dump
+
+          psql \
+            --host=localhost \
+            --port=5432 \
+            --username=ho \
+            --dbname=postgres \
+            --command="DROP DATABASE IF EXISTS ho_network_restore WITH (FORCE);"
+
+          psql \
+            --host=localhost \
+            --port=5432 \
+            --username=ho \
+            --dbname=postgres \
+            --command="CREATE DATABASE ho_network_restore OWNER ho;"
+
+          docker run --rm --network host \
+            -e PGPASSWORD="$PGPASSWORD" \
+            -v /tmp:/tmp \
+            postgres:17-alpine \
+            pg_restore --clean --if-exists --no-owner --no-acl \
+              --host=localhost --port=5432 --username=ho --dbname=ho_network_restore \
+              /tmp/ho-network-ci.dump
+
+          restored_tables=$(psql \
+            --host=localhost \
+            --port=5432 \
+            --username=ho \
+            --dbname=ho_network_restore \
+            --tuples-only \
+            --no-align \
+            --command="SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';")
+
+          test "$restored_tables" -ge 20
+
+          restored_migrations=$(psql \
+            --host=localhost \
+            --port=5432 \
+            --username=ho \
+            --dbname=ho_network_restore \
+            --tuples-only \
+            --no-align \
+            --command="SELECT count(*) FROM schema_migrations;")
+
+          test "$restored_migrations" -eq 23
+
+          restored_accounts=$(psql \
+            --host=localhost \
+            --port=5432 \
+            --username=ho \
+            --dbname=ho_network_restore \
+            --tuples-only \
+            --no-align \
+            --command="SELECT count(*) FROM chart_of_accounts;")
+
+          test "$restored_accounts" -ge 17
+
+          DATABASE_URL=postgresql://ho:test-password@localhost:5432/ho_network_restore \
+          NODE_ENV=test \
+            npm run db:verify
+
+          psql \
+            --host=localhost \
+            --port=5432 \
+            --username=ho \
+            --dbname=postgres \
+            --command="DROP DATABASE ho_network_restore WITH (FORCE);"
+
+          rm -f /tmp/ho-network-ci.dump

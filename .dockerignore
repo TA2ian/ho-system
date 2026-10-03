@@ -1,0 +1,10 @@
+node_modules
+npm-debug.log
+.git
+.github
+coverage
+.env
+.env.*
+!.env.example
+backups
+apps/web/dist
