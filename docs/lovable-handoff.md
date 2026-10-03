@@ -144,18 +144,46 @@ Do not allow duplicate submissions while a mutation is in progress.
 
 ## 9. Customers
 
-The customer experience should support the existing foundation behavior:
+The current `foundation/v1` Customer API is intentionally narrower than the long-term HO Network Customer 360 model.
 
+Current API-backed customer capabilities only:
 - List active customers
 - Pagination
 - Create customer
 - Individual/business type
-- Name
-- Phone
-- Email
-- Clear validation feedback
+- Display name
+- One primary phone field
+- One email field
+- Notes
+- Active/inactive/blocked status
 
-The UI should make customer selection reusable by Sales Orders, Invoices, Receivables, and Payments.
+The current frontend must not fabricate Customer 360 fields that are not present in the API.
+
+The long-term HO Network customer model is broader because the platform operates around media-buying customer relationships. The target Customer 360 model is documented separately in `docs/customer-360-expansion.md` and is not considered frontend-ready until its server-side contract exists.
+
+When the Customer 360 contract is implemented, the customer experience is expected to organize, as API-backed resources, the following areas:
+- Customer profile
+- Multiple phone numbers
+- Multiple addresses/residence records
+- Social accounts
+- Notes
+- Documents and document references
+- Media agreements
+- Media campaigns
+- Delivery orders
+- Invoices
+- Payments
+- Financial/operational history or timeline
+
+The relationship between media-buying entities must remain server-authoritative:
+
+Customer -> Media Agreement -> Campaign -> advertising platform/account -> planned budget -> actual advertising spend
+
+Customer accounting balance, campaign budget state, and actual advertising spend are distinct concepts and must never be merged into one client-side balance.
+
+Until the corresponding API resources are implemented, Lovable should keep Customers limited to the current contract and may provide navigation placeholders only where explicitly identified as future functionality.
+
+The customer selector should remain reusable by Sales Orders, Invoices, Receivables, Payments, and future media-buying workflows.
 
 ## 10. Sales Orders
 
