@@ -146,7 +146,7 @@ Do not allow duplicate submissions while a mutation is in progress.
 
 The current `foundation/v1` Customer API is intentionally narrower than the long-term HO Network Customer 360 model.
 
-Current API-backed customer capabilities only:
+Current API-backed customer capabilities:
 - List active customers
 - Pagination
 - Create customer
@@ -156,12 +156,17 @@ Current API-backed customer capabilities only:
 - One email field
 - Notes
 - Active/inactive/blocked status
+- Multiple customer phone records
+- Multiple customer address records
+- Multiple customer social-account records
+- Business profile for business-type customers
+- Independent Media Agreements with customer linkage, commercial terms, lifecycle, pagination, validation, audit, and idempotent creation/read operations
 
-The current frontend must not fabricate Customer 360 fields that are not present in the API.
+The current frontend must not fabricate Customer 360 fields that are not present in the API. The newly implemented child resources may be integrated only through their documented API contracts and the existing API client boundary.
 
 The long-term HO Network customer model is broader because the platform operates around media-buying customer relationships. The target Customer 360 model is documented separately in `docs/customer-360-expansion.md` and is not considered frontend-ready until its server-side contract exists.
 
-When the Customer 360 contract is implemented, the customer experience is expected to organize, as API-backed resources, the following areas:
+The remaining long-term Customer 360 areas are expected to organize, as API-backed resources, the following:
 - Customer profile
 - Multiple phone numbers
 - Multiple addresses/residence records
@@ -181,7 +186,7 @@ Customer -> Media Agreement -> Campaign -> advertising platform/account -> plann
 
 Customer accounting balance, campaign budget state, and actual advertising spend are distinct concepts and must never be merged into one client-side balance.
 
-Until the corresponding API resources are implemented, Lovable should keep Customers limited to the current contract and may provide navigation placeholders only where explicitly identified as future functionality.
+Documents remain intentionally blocked until the provider-neutral storage contract and an actual private storage/access capability are implemented. A unified financial/operational timeline also remains deferred until its authorization boundary is designed. Lovable must not fabricate either capability. Other future areas remain limited to their actual API contracts and may use explicit navigation placeholders only where identified as future functionality.
 
 The customer selector should remain reusable by Sales Orders, Invoices, Receivables, Payments, and future media-buying workflows.
 
@@ -425,20 +430,11 @@ A Lovable implementation is acceptable only if:
 
 ## 24. Current verification baseline
 
-At the time of this handoff, commit `4817f4c4f71cd1f5e72f4cd3f4978027be7b5704` on `foundation/v1` has a successful CI run.
+The branch is actively evolving. The latest commit is not considered CI-verified until its GitHub Actions run reaches a successful conclusion.
 
-Verified CI jobs:
+At the current checkpoint, the latest `foundation/v1` run is still in progress during the container image build. Earlier successful checks do not certify the latest commit.
 
-- typecheck — success
-- database — success
-- web — success
-- web typecheck — success
-- web build — success
-- npm audit at high severity threshold — success
-- test suite — success
-- database verification — success
-
-Any visual/UI changes must preserve this baseline.
+Any visual/UI or backend changes must preserve the last verified baseline and must be revalidated against the latest commit before the section is considered closed.
 
 ## 25. Source-of-truth hierarchy
 
