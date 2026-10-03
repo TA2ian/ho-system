@@ -65,6 +65,16 @@ export async function createCustomer(
   return toCustomer(row);
 }
 
+export async function getCustomer(db: Database, customerId: string): Promise<Customer> {
+  if (!z.string().uuid().safeParse(customerId).success) {
+    throw new ApplicationError("CUSTOMER_ID_INVALID", 400, "معرّف العميل غير صالح");
+  }
+
+  const [row] = await db.select().from(customers).where(eq(customers.id, customerId)).limit(1);
+  if (!row) throw new ApplicationError("CUSTOMER_NOT_FOUND", 404, "العميل غير موجود");
+  return toCustomer(row);
+}
+
 export async function listCustomers(db: Database, pagination: Pagination) {
   const rows = await db.select().from(customers)
     .where(eq(customers.status, "active"))
