@@ -87,6 +87,8 @@ The storage contract must define document type, customer ownership, external/sto
 Actual file storage and access control must be implemented as a separate reviewed capability.
 
 ## Media agreements
+
+The first server-side Media Agreement slice is now implemented as an independent resource with persistence, validation, customer/currency checks, audit events, pagination, and API read/create operations. It is intentionally not yet mandatory on campaigns.
 A media agreement belongs to a customer and defines the commercial relationship used by campaigns.
 
 Conceptual fields:
