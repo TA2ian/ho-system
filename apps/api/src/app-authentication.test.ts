@@ -17,14 +17,9 @@ test("protected routes stop after authentication failure", async () => {
     authAdapter: adapter
   });
 
-  app.post("/api/v1/test-auth-stop", async () => {
-    routeReached = true;
-    return { reached: true };
-  });
-
   const response = await app.inject({
-    method: "POST",
-    url: "/api/v1/test-auth-stop"
+    method: "GET",
+    url: "/api/v1/customers"
   });
 
   assert.equal(response.statusCode, 401);
