@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useId, useCallback } from "react";
 
 interface ReasonPromptDialogProps {
   isOpen: boolean;
@@ -31,18 +31,78 @@ export const ReasonPromptDialog: React.FC<ReasonPromptDialogProps> = ({
 }) => {
   const [reason, setReason] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
+  // Generate unique IDs per instance to prevent DOM ID collisions
+  const autoId = useId();
+  const titleId = `ho-reason-title-${autoId}`;
+  const descId = `ho-reason-desc-${autoId}`;
+  const inputId = `ho-reason-input-${autoId}`;
+  const hintId = `ho-reason-hint-${autoId}`;
+
+  // Focus restoration & background scroll locking
   useEffect(() => {
     if (isOpen) {
+      previousFocusRef.current = document.activeElement as HTMLElement | null;
       setReason("");
-      setTimeout(() => inputRef.current?.focus(), 50);
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === "Escape" && !isProcessing) onCancel();
+
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 30);
+
+      return () => {
+        clearTimeout(timer);
+        document.body.style.overflow = originalOverflow;
+        if (previousFocusRef.current && typeof previousFocusRef.current.focus === "function") {
+          previousFocusRef.current.focus();
+        }
       };
-      window.addEventListener("keydown", handleKeyDown);
-      return () => window.removeEventListener("keydown", handleKeyDown);
     }
-  }, [isOpen, isProcessing, onCancel]);
+  }, [isOpen]);
+
+  // Focus trap & Escape key handling
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === "Escape") {
+        if (!isProcessing) {
+          e.preventDefault();
+          e.stopPropagation();
+          onCancel();
+        }
+        return;
+      }
+
+      if (e.key === "Tab") {
+        if (!dialogRef.current) return;
+
+        const focusableElements = dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+
+        if (focusableElements.length === 0) return;
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
+      }
+    },
+    [isProcessing, onCancel]
+  );
 
   if (!isOpen) return null;
 
@@ -56,27 +116,40 @@ export const ReasonPromptDialog: React.FC<ReasonPromptDialogProps> = ({
   };
 
   return (
-    <div className="ho-dialog-backdrop" role="presentation">
+    <div
+      className="ho-dialog-backdrop"
+      role="presentation"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isProcessing) {
+          onCancel();
+        }
+      }}
+    >
       <div
+        ref={dialogRef}
         className="ho-dialog"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="reason-dialog-title"
+        aria-labelledby={titleId}
+        aria-describedby={`${descId} ${hintId}`}
+        onKeyDown={handleKeyDown}
       >
         <form onSubmit={handleSubmit}>
           <div className="ho-dialog-header">
-            <h2 id="reason-dialog-title" className="ho-dialog-title">
+            <h2 id={titleId} className="ho-dialog-title">
               {title}
             </h2>
           </div>
           <div className="ho-dialog-body">
-            <p className="ho-dialog-description">{description}</p>
+            <p id={descId} className="ho-dialog-description">
+              {description}
+            </p>
             <div className="ho-form-field">
-              <label htmlFor="reason-input" className="ho-label">
+              <label htmlFor={inputId} className="ho-label">
                 {inputLabel}
               </label>
               <textarea
-                id="reason-input"
+                id={inputId}
                 ref={inputRef}
                 className="ho-textarea"
                 rows={3}
@@ -84,9 +157,10 @@ export const ReasonPromptDialog: React.FC<ReasonPromptDialogProps> = ({
                 onChange={(e) => setReason(e.target.value)}
                 placeholder={placeholder}
                 disabled={isProcessing}
+                aria-describedby={hintId}
                 required
               />
-              <small className="ho-field-hint">
+              <small id={hintId} className="ho-field-hint">
                 يجب ألا يقل السبب عن {minCharacters} أحرف.
               </small>
             </div>
