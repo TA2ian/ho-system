@@ -18,7 +18,7 @@ try {
   const first = await pool.query<{ count: string }>(
     "SELECT count(*)::text AS count FROM schema_migrations"
   );
-  const expectedMigrations = 23;
+  const expectedMigrations = 26;
   if (Number(first.rows[0]?.count) !== expectedMigrations) {
     throw new Error(
       `Expected ${expectedMigrations} migrations, found ${first.rows[0]?.count ?? "none"}`
@@ -57,7 +57,12 @@ try {
     "accounting_periods",
     "chart_of_accounts",
     "journal_entries",
-    "journal_lines"
+    "journal_lines",
+    "customer_phones",
+    "customer_addresses",
+    "customer_social_accounts",
+    "media_agreements",
+    "customer_business_profiles"
   ];
 
   const tableResult = await pool.query<{ table_name: string }>(
