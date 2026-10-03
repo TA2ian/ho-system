@@ -82,10 +82,11 @@
 - Backup/restore verification — automated CI round-trip backup/restore check passed successfully against PostgreSQL 17, including post-restore db:verify
 
 ## Phase 8 — Production
-- Container images
-- VPS
-- PostgreSQL
-- Reverse proxy/TLS
-- Backups
-- Monitoring
-- CI/CD
+- Container images — production Docker image hardened with non-root runtime, readiness healthcheck, and GHCR CI build/publish workflow
+- VPS — production Docker Compose deployment contract added; host deployment remains an external operational step
+- PostgreSQL — PostgreSQL 17 production service isolated on an internal Docker network with persistent volume and healthcheck
+- Reverse proxy/TLS — Caddy HTTPS reverse proxy with security headers and automatic certificate lifecycle; configuration validated in CI
+- Backups — controlled backup/restore scripts plus PostgreSQL 17 CI round-trip verification
+- Monitoring — /health and /ready endpoints wired to container healthchecks and documented external monitoring contract
+- CI/CD — production Compose/Caddy validation and container build verified in CI
+- Production authentication gate — startup now fails closed when the provider-neutral authentication adapter is still unconfigured; a real provider adapter remains required before live deployment
