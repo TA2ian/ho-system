@@ -9,6 +9,7 @@ import { checkDatabaseHealth } from "./db/health.js";
 import type { Database } from "./db/client.js";
 import { withTransaction } from "./db/transaction.js";
 import { createCustomer, createCustomerInputSchema, listCustomers } from "./application/customers/customer-service.js";
+import { createCustomerPhone, createCustomerPhoneInputSchema, createCustomerAddress, createCustomerAddressInputSchema, createCustomerSocialAccount, createCustomerSocialAccountInputSchema, listCustomerPhones, listCustomerAddresses, listCustomerSocialAccounts } from "./application/customers/customer-360-service.js";
 import { beginIdempotency, completeIdempotency, hashRequestBody } from "./application/idempotency.js";
 import { assertPermission } from "./identity/auth.js";
 import type { AuthenticationAdapter } from "./identity/auth.js";
@@ -151,6 +152,81 @@ export function buildApp(dependencies: {
       return { kind: "new" as const, status: 201, body };
     });
 
+    return reply.status(result.status).send(result.body);
+  });
+
+  app.get<{ Params: { customerId: string } }>("/api/v1/customers/:customerId/phones", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "customers.read");
+    const page = await listCustomerPhones(dependencies.db, request.params.customerId, parsePaginationQuery(request.query));
+    return reply.send({ data: page.rows, meta: page.meta });
+  });
+
+  app.post<{ Params: { customerId: string } }>("/api/v1/customers/:customerId/phones", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "customers.write");
+    const parsed = createCustomerPhoneInputSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "بيانات رقم الهاتف غير صالحة", issues: parsed.error.flatten() });
+    const key = request.headers["idempotency-key"];
+    if (typeof key !== "string" || key.trim().length < 16 || key.length > 255) return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
+    const idempotencyKey = key.trim();
+    const result = await withTransaction(dependencies.pool, async (tx) => {
+      const idem = await beginIdempotency(tx, `customer:phone:create:${request.params.customerId}:${request.principal!.userId}`, hashRequestBody(parsed.data));
+      if (idem.kind === "replay") return idem;
+      if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
+      const row = await createCustomerPhone(tx, request.params.customerId, parsed.data, { actorId: request.principal!.userId, requestId: request.id, idempotencyKey });
+      const body = { data: row }; await completeIdempotency(tx, idem.id, 201, body); return { kind: "new" as const, status: 201, body };
+    });
+    return reply.status(result.status).send(result.body);
+  });
+
+  app.get<{ Params: { customerId: string } }>("/api/v1/customers/:customerId/addresses", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "customers.read");
+    const page = await listCustomerAddresses(dependencies.db, request.params.customerId, parsePaginationQuery(request.query));
+    return reply.send({ data: page.rows, meta: page.meta });
+  });
+
+  app.post<{ Params: { customerId: string } }>("/api/v1/customers/:customerId/addresses", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "customers.write");
+    const parsed = createCustomerAddressInputSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "بيانات العنوان غير صالحة", issues: parsed.error.flatten() });
+    const key = request.headers["idempotency-key"];
+    if (typeof key !== "string" || key.trim().length < 16 || key.length > 255) return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
+    const idempotencyKey = key.trim();
+    const result = await withTransaction(dependencies.pool, async (tx) => {
+      const idem = await beginIdempotency(tx, `customer:address:create:${request.params.customerId}:${request.principal!.userId}`, hashRequestBody(parsed.data));
+      if (idem.kind === "replay") return idem;
+      if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
+      const row = await createCustomerAddress(tx, request.params.customerId, parsed.data, { actorId: request.principal!.userId, requestId: request.id, idempotencyKey });
+      const body = { data: row }; await completeIdempotency(tx, idem.id, 201, body); return { kind: "new" as const, status: 201, body };
+    });
+    return reply.status(result.status).send(result.body);
+  });
+
+  app.get<{ Params: { customerId: string } }>("/api/v1/customers/:customerId/social-accounts", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "customers.read");
+    const page = await listCustomerSocialAccounts(dependencies.db, request.params.customerId, parsePaginationQuery(request.query));
+    return reply.send({ data: page.rows, meta: page.meta });
+  });
+
+  app.post<{ Params: { customerId: string } }>("/api/v1/customers/:customerId/social-accounts", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({ error: "UNAUTHORIZED", message: "المصادقة مطلوبة" });
+    assertPermission(request.principal, "customers.write");
+    const parsed = createCustomerSocialAccountInputSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: "VALIDATION_ERROR", message: "بيانات الحساب الاجتماعي غير صالحة", issues: parsed.error.flatten() });
+    const key = request.headers["idempotency-key"];
+    if (typeof key !== "string" || key.trim().length < 16 || key.length > 255) return reply.status(400).send({ error: "IDEMPOTENCY_KEY_REQUIRED", message: "يجب إرسال مفتاح Idempotency-Key صالح" });
+    const idempotencyKey = key.trim();
+    const result = await withTransaction(dependencies.pool, async (tx) => {
+      const idem = await beginIdempotency(tx, `customer:social:create:${request.params.customerId}:${request.principal!.userId}`, hashRequestBody(parsed.data));
+      if (idem.kind === "replay") return idem;
+      if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
+      const row = await createCustomerSocialAccount(tx, request.params.customerId, parsed.data, { actorId: request.principal!.userId, requestId: request.id, idempotencyKey });
+      const body = { data: row }; await completeIdempotency(tx, idem.id, 201, body); return { kind: "new" as const, status: 201, body };
+    });
     return reply.status(result.status).send(result.body);
   });
 
