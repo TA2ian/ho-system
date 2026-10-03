@@ -9,7 +9,7 @@ import { invoices } from "../../db/invoice-schema.js";
 import { roles, userRoles, users } from "../../db/schema.js";
 import { ApplicationError } from "../../domain/errors.js";
 import { recordAuditEvent } from "../audit.js";
-import { postCampaignSpendRecorded } from "../accounting/accounting-posting-service.js";
+import { postCampaignSpendRecorded, reverseCampaignSpend } from "../accounting/accounting-posting-service.js";
 
 const uuidSchema = z.string().uuid();
 const amount = z.string().regex(/^\d+(\.\d{1,10})?$/).refine(v => new Decimal(v).gte(0), "المبلغ يجب ألا يكون سالباً");
@@ -165,7 +165,7 @@ export async function reverseCampaignSpendEntry(
     id: reversalId, spendId, reason: input.reason.trim(), reversedBy: context.actorId
   }).returning();
   if (!reversal) throw new ApplicationError("CAMPAIGN_SPEND_REVERSAL_FAILED", 500, "تعذر إنشاء عكس الإنفاق");
-  await import("../accounting/accounting-posting-service.js").then(({ reverseCampaignSpend }) => reverseCampaignSpend(db, spendId, context));
+  await reverseCampaignSpend(db, spendId, context);
   await recordAuditEvent(db, { actorId: context.actorId, action: "campaign.spend_reversed", resourceType: "campaign", resourceId: campaignId, requestId: context.requestId, idempotencyKey: context.idempotencyKey, metadata: { spendId, reversalId, reason: input.reason.trim() } });
   return getCampaign(db, campaignId, context.actorId, privileged);
 }
