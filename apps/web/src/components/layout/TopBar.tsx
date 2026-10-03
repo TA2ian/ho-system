@@ -3,6 +3,7 @@ import React from "react";
 interface TopBarProps {
   sidebarOpen: boolean;
   sidebarId: string;
+  toggleButtonRef: React.RefObject<HTMLButtonElement | null>;
   onToggleSidebar: () => void;
   onEndSession: () => void;
 }
@@ -10,6 +11,7 @@ interface TopBarProps {
 export const TopBar: React.FC<TopBarProps> = ({
   sidebarOpen,
   sidebarId,
+  toggleButtonRef,
   onToggleSidebar,
   onEndSession,
 }) => {
@@ -18,6 +20,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       <div className="ho-topbar-start">
         <button
           type="button"
+          ref={toggleButtonRef}
           className="ho-hamburger-btn"
           onClick={onToggleSidebar}
           aria-expanded={sidebarOpen}
