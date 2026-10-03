@@ -6,6 +6,7 @@ import type { Database } from "../../db/client.js";
 import { catalogCategories, catalogItems } from "../../db/catalog-schema.js";
 import { recordAuditEvent } from "../audit.js";
 import { ApplicationError } from "../../domain/errors.js";
+import { pageRows, type Pagination } from "../pagination.js";
 import {
   catalogCodeSchema,
   catalogItemKindSchema,
@@ -54,10 +55,12 @@ function assertSaleNotBelowCost(costPrice: string, salePrice: string): void {
   }
 }
 
-export async function listCatalogCategories(db: Database): Promise<CatalogCategory[]> {
+export async function listCatalogCategories(db: Database, pagination: Pagination) {
   const rows = await db.select().from(catalogCategories)
-    .where(eq(catalogCategories.isActive, true));
-  return rows.map(toCategory);
+    .where(eq(catalogCategories.isActive, true))
+    .limit(pagination.limit + 1)
+    .offset(pagination.offset);
+  return pageRows(rows.map(toCategory), pagination);
 }
 
 export async function createCatalogItem(
@@ -135,8 +138,10 @@ export async function createCatalogItem(
   return toItem(row);
 }
 
-export async function listCatalogItems(db: Database): Promise<CatalogItem[]> {
+export async function listCatalogItems(db: Database, pagination: Pagination) {
   const rows = await db.select().from(catalogItems)
-    .where(eq(catalogItems.isActive, true));
-  return rows.map(toItem);
+    .where(eq(catalogItems.isActive, true))
+    .limit(pagination.limit + 1)
+    .offset(pagination.offset);
+  return pageRows(rows.map(toItem), pagination);
 }
