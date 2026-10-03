@@ -9,6 +9,7 @@ CREATE TABLE customer_phones (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX customer_phones_customer_idx ON customer_phones(customer_id);
+CREATE UNIQUE INDEX customer_phones_identity_uq ON customer_phones(customer_id, phone);
 CREATE UNIQUE INDEX customer_phones_primary_uq ON customer_phones(customer_id) WHERE is_primary;
 
 CREATE TABLE customer_addresses (
