@@ -7,6 +7,7 @@ import { employeeCompensationRules, employeeTasks } from "../../db/employee-sche
 import { roles, userRoles, users } from "../../db/schema.js";
 import { ApplicationError } from "../../domain/errors.js";
 import { recordAuditEvent } from "../audit.js";
+import { pageRows, type Pagination } from "../pagination.js";
 import { postEmployeeCompensation } from "../accounting/accounting-posting-service.js";
 
 const uuid=z.string().uuid();
@@ -51,9 +52,11 @@ export async function createCompensationRule(db:Database,input:z.infer<typeof cr
   return row;
 }
 
-export async function listCompensationRules(db:Database,employeeUserId?:string){
+export async function listCompensationRules(db:Database,employeeUserId?:string,pagination?:Pagination){
   const where=employeeUserId?eq(employeeCompensationRules.employeeUserId,employeeUserId):undefined;
-  return db.select().from(employeeCompensationRules).where(where).orderBy(asc(employeeCompensationRules.createdAt));
+  const page = pagination ?? { limit: 50, offset: 0 };
+  const rows = await db.select().from(employeeCompensationRules).where(where).orderBy(asc(employeeCompensationRules.createdAt)).limit(page.limit + 1).offset(page.offset);
+  return pageRows(rows, page);
 }
 
 export async function createEmployeeTask(db:Database,input:z.infer<typeof createEmployeeTaskInputSchema>,context:{actorId:string;requestId:string;idempotencyKey:string}){
@@ -64,10 +67,12 @@ export async function createEmployeeTask(db:Database,input:z.infer<typeof create
   return row;
 }
 
-export async function listEmployeeTasks(db:Database,actorId:string,privileged:boolean,employeeUserId?:string){
+export async function listEmployeeTasks(db:Database,actorId:string,privileged:boolean,employeeUserId?:string,pagination?:Pagination){
   if(!privileged) employeeUserId=actorId;
   if(employeeUserId)await assertActiveEmployee(db,employeeUserId);
-  return db.select().from(employeeTasks).where(employeeUserId?eq(employeeTasks.employeeUserId,employeeUserId):undefined).orderBy(asc(employeeTasks.createdAt));
+  const page = pagination ?? { limit: 50, offset: 0 };
+  const rows = await db.select().from(employeeTasks).where(employeeUserId?eq(employeeTasks.employeeUserId,employeeUserId):undefined).orderBy(asc(employeeTasks.createdAt)).limit(page.limit + 1).offset(page.offset);
+  return pageRows(rows, page);
 }
 
 export async function completeEmployeeTask(db:Database,taskId:string,context:{actorId:string;requestId:string;idempotencyKey:string},privileged:boolean){
