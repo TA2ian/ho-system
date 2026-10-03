@@ -72,6 +72,14 @@ button, input, select, textarea {
   font: inherit;
 }
 
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--ho-color-primary);
+  outline-offset: 2px;
+}
+
 /* App Shell Layout */
 .ho-app-shell {
   display: flex;
@@ -161,6 +169,7 @@ button, input, select, textarea {
   border: none;
   cursor: pointer;
   padding: 0.5rem;
+  border-radius: var(--ho-radius-sm);
 }
 
 .ho-hamburger-line {
@@ -262,6 +271,9 @@ button, input, select, textarea {
 
 .ho-sidebar-overlay {
   display: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
 }
 
 /* Main Content */
@@ -844,6 +856,7 @@ th {
 
   .ho-sidebar {
     position: fixed;
+    visibility: hidden;
     top: 60px;
     bottom: 0;
     right: 0;
@@ -855,6 +868,7 @@ th {
 
   .ho-sidebar.is-open {
     transform: translateX(0);
+    visibility: visible;
   }
 
   .ho-sidebar-overlay {
