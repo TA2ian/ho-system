@@ -32,6 +32,17 @@ Financial report amounts and persisted accounting amounts remain decimal strings
 
 Changes to `/api/v1` behavior must update the OpenAPI contract and this document in the same change. Breaking transport changes require a new API version rather than silently changing the existing v1 contract.
 
+## Customer root detail
+
+The customer root resource is available for Customer 360 navigation and reload-safe detail views:
+
+- `GET /api/v1/customers/{customerId}`
+- Requires `customers.read`
+- Returns the authoritative customer row in the standard `{ data }` envelope
+- Invalid UUID returns `400 CUSTOMER_ID_INVALID`; missing customer returns `404 CUSTOMER_NOT_FOUND`
+
+The frontend must use this endpoint for a customer detail route instead of relying on list-page state as the source of truth.
+
 ## Customer 360 contact resources
 
 Customer contact extensions are server-authoritative child resources. They require `customers.read` for reads and `customers.write` for mutations.
