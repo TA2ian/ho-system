@@ -58,7 +58,7 @@ export async function reconcileOperationalJournals(
     FROM expected e
     LEFT JOIN journal_entries je ON je.source_event_key = e.event_key
     ORDER BY e.source_date, e.category, e.source_id
-  \`);
+  `);
 
   const reversalRows = await db.execute(sql`
     WITH expected_reversals AS (
@@ -106,7 +106,7 @@ export async function reconcileOperationalJournals(
     LEFT JOIN journal_entries original ON original.source_event_key = er.event_key
     LEFT JOIN journal_entries reversal ON reversal.reverses_entry_id = original.id
     ORDER BY er.source_date, er.category, er.source_id
-  \`);
+  `);
 
   const issues: ReconciliationIssue[] = [];
 
