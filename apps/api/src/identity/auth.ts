@@ -1,3 +1,10 @@
+export class InvalidAuthenticationError extends Error {
+  constructor(message = "INVALID_CREDENTIALS") {
+    super(message);
+    this.name = "InvalidAuthenticationError";
+  }
+}
+
 export interface AuthenticatedPrincipal {
   userId: string;
   provider: string;
@@ -38,4 +45,3 @@ export function assertPermission(
     throw new Error("FORBIDDEN");
   }
 }
-
