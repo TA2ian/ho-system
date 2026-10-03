@@ -58,17 +58,23 @@ export async function listCustomerSocialAccounts(db: Database, customerId: strin
   return pageRows(rows, pagination);
 }
 
-async function makePrimary(db: Database, table: typeof customerPhones | typeof customerAddresses | typeof customerSocialAccounts, customerId: string, platform?: string) {
-  if (table === customerSocialAccounts && platform) {
-    await db.update(table).set({ isPrimary: false }).where(and(eq(table.customerId, customerId), eq(table.platform, platform)));
-  } else {
-    await db.update(table).set({ isPrimary: false }).where(eq(table.customerId, customerId));
-  }
+async function clearPrimaryPhones(db: Database, customerId: string) {
+  await db.update(customerPhones).set({ isPrimary: false }).where(eq(customerPhones.customerId, customerId));
 }
+async function clearPrimaryAddresses(db: Database, customerId: string) {
+  await db.update(customerAddresses).set({ isPrimary: false }).where(eq(customerAddresses.customerId, customerId));
+}
+async function clearPrimarySocialAccounts(db: Database, customerId: string, platform: string) {
+  await db.update(customerSocialAccounts).set({ isPrimary: false }).where(and(
+    eq(customerSocialAccounts.customerId, customerId),
+    eq(customerSocialAccounts.platform, platform)
+  ));
+}
+
 
 export async function createCustomerPhone(db: Database, customerId: string, input: z.infer<typeof createCustomerPhoneInputSchema>, context: { actorId: string; requestId: string; idempotencyKey: string }) {
   await assertCustomer(db, customerId);
-  if (input.isPrimary) await makePrimary(db, customerPhones, customerId);
+  if (input.isPrimary) await clearPrimaryPhones(db, customerId);
   const [row] = await db.insert(customerPhones).values({ id: randomUUID(), customerId, phone: input.phone.trim(), label: input.label?.trim() || null, isPrimary: input.isPrimary ?? false, notes: input.notes?.trim() || null }).returning();
   if (!row) throw new ApplicationError("CUSTOMER_PHONE_CREATE_FAILED", 500, "تعذر إضافة رقم الهاتف");
   await recordAuditEvent(db, { actorId: context.actorId, action: "customer.phone.created", resourceType: "customer", resourceId: customerId, requestId: context.requestId, idempotencyKey: context.idempotencyKey, metadata: { phoneId: row.id } });
@@ -76,7 +82,7 @@ export async function createCustomerPhone(db: Database, customerId: string, inpu
 }
 export async function createCustomerAddress(db: Database, customerId: string, input: z.infer<typeof createCustomerAddressInputSchema>, context: { actorId: string; requestId: string; idempotencyKey: string }) {
   await assertCustomer(db, customerId);
-  if (input.isPrimary) await makePrimary(db, customerAddresses, customerId);
+  if (input.isPrimary) await clearPrimaryAddresses(db, customerId);
   const [row] = await db.insert(customerAddresses).values({ id: randomUUID(), customerId, label: input.label?.trim() || null, addressLine1: input.addressLine1.trim(), addressLine2: input.addressLine2?.trim() || null, city: input.city?.trim() || null, region: input.region?.trim() || null, postalCode: input.postalCode?.trim() || null, countryCode: input.countryCode?.trim().toUpperCase() || null, isPrimary: input.isPrimary ?? false, notes: input.notes?.trim() || null }).returning();
   if (!row) throw new ApplicationError("CUSTOMER_ADDRESS_CREATE_FAILED", 500, "تعذر إضافة العنوان");
   await recordAuditEvent(db, { actorId: context.actorId, action: "customer.address.created", resourceType: "customer", resourceId: customerId, requestId: context.requestId, idempotencyKey: context.idempotencyKey, metadata: { addressId: row.id } });
@@ -84,7 +90,7 @@ export async function createCustomerAddress(db: Database, customerId: string, in
 }
 export async function createCustomerSocialAccount(db: Database, customerId: string, input: z.infer<typeof createCustomerSocialAccountInputSchema>, context: { actorId: string; requestId: string; idempotencyKey: string }) {
   await assertCustomer(db, customerId);
-  if (input.isPrimary) await makePrimary(db, customerSocialAccounts, customerId, input.platform.trim());
+  if (input.isPrimary) await clearPrimarySocialAccounts(db, customerId, input.platform.trim().toLowerCase());
   const [row] = await db.insert(customerSocialAccounts).values({ id: randomUUID(), customerId, platform: input.platform.trim().toLowerCase(), accountIdentifier: input.accountIdentifier.trim(), profileUrl: input.profileUrl?.trim() || null, isPrimary: input.isPrimary ?? false, notes: input.notes?.trim() || null }).returning();
   if (!row) throw new ApplicationError("CUSTOMER_SOCIAL_CREATE_FAILED", 500, "تعذر إضافة الحساب الاجتماعي");
   await recordAuditEvent(db, { actorId: context.actorId, action: "customer.social_account.created", resourceType: "customer", resourceId: customerId, requestId: context.requestId, idempotencyKey: context.idempotencyKey, metadata: { socialAccountId: row.id, platform: row.platform } });
