@@ -4,6 +4,7 @@ import helmet from "@fastify/helmet";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { config } from "./config.js";
+import { assertUserRateLimit } from "./security/rate-limit.js";
 import { checkDatabaseHealth } from "./db/health.js";
 import type { Database } from "./db/client.js";
 import { withTransaction } from "./db/transaction.js";
@@ -48,6 +49,21 @@ export function buildApp(dependencies: {
       db: dependencies.db,
       adapter: dependencies.authAdapter
     });
+
+    if (request.principal) {
+      try {
+        assertUserRateLimit(request.principal.userId);
+      } catch (error) {
+        if (error instanceof Error && error.message === "RATE_LIMITED") {
+          return reply.status(429).send({
+            error: "RATE_LIMITED",
+            message: "تم تجاوز حد الطلبات، حاول لاحقًا",
+            retryAfterSeconds: config.RATE_LIMIT_WINDOW_SECONDS
+          });
+        }
+        throw error;
+      }
+    }
   });
 
   app.get("/health", async () => ({
