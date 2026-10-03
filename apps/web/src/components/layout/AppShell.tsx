@@ -23,12 +23,15 @@ export const AppShell: React.FC<AppShellProps> = ({
   return (
     <div className="ho-app-shell" dir="rtl">
       <TopBar
+        sidebarOpen={sidebarOpen}
+        sidebarId="ho-main-navigation"
         onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
         onEndSession={onEndSession}
       />
 
       <div className="ho-workspace">
         <Sidebar
+          id="ho-main-navigation"
           items={navItems}
           activeId={activeId}
           onSelect={onSelectNav}
