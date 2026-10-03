@@ -64,18 +64,11 @@ jobs:
           DATABASE_URL: postgresql://ho:test-password@localhost:5432/ho_network
       - name: Backup and restore verification
         env:
+          DATABASE_URL: postgresql://ho:test-password@localhost:5432/ho_network
           PGPASSWORD: test-password
         run: |
           set -euo pipefail
-          pg_dump \
-            --format=custom \
-            --no-owner \
-            --no-acl \
-            --host=localhost \
-            --port=5432 \
-            --username=ho \
-            --dbname=ho_network \
-            --file=/tmp/ho-network-ci.dump
+          bash scripts/backup.sh /tmp/ho-network-ci.dump
 
           psql \
             --host=localhost \
@@ -91,14 +84,9 @@ jobs:
             --dbname=postgres \
             --command="CREATE DATABASE ho_network_restore OWNER ho;"
 
-          pg_restore \
-            --no-owner \
-            --no-acl \
-            --host=localhost \
-            --port=5432 \
-            --username=ho \
-            --dbname=ho_network_restore \
-            /tmp/ho-network-ci.dump
+          DATABASE_URL=postgresql://ho:test-password@localhost:5432/ho_network_restore \
+          ALLOW_DESTRUCTIVE_RESTORE=YES \
+            bash scripts/restore.sh /tmp/ho-network-ci.dump
 
           restored_tables=$(psql \
             --host=localhost \
