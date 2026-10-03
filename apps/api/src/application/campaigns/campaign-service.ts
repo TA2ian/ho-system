@@ -3,7 +3,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { Decimal } from "decimal.js";
 import { z } from "zod";
 import type { Database } from "../../db/client.js";
-import { campaignInvoices, campaigns, campaignSpendEntries } from "../../db/campaign-schema.js";
+import { campaignInvoices, campaigns, campaignSpendEntries, campaignSpendReversals } from "../../db/campaign-schema.js";
 import { customers } from "../../db/customer-schema.js";
 import { invoices } from "../../db/invoice-schema.js";
 import { roles, userRoles, users } from "../../db/schema.js";
@@ -89,12 +89,12 @@ export async function createCampaign(db: Database, input: z.infer<typeof createC
 
 export async function getCampaign(db: Database, campaignId: string, actorId: string, privileged: boolean) {
   const row = await assertCampaignAccess(db, campaignId, actorId, privileged) ?? await getCampaignRow(db, campaignId);
-  const spend = await db.select().from(campaignSpendEntries).where(eq(campaignSpendEntries.campaignId, campaignId)).orderBy(asc(campaignSpendEntries.spentAt));
+  const spend = await db.execute(sql`\n    SELECT cse.*, (csr.id IS NOT NULL) AS reversed\n    FROM campaign_spend_entries cse\n    LEFT JOIN campaign_spend_reversals csr ON csr.spend_id = cse.id\n    WHERE cse.campaign_id = ${campaignId}::uuid\n    ORDER BY cse.spent_at ASC\n  `);
   const invoicesLinked = await db.select().from(campaignInvoices).where(eq(campaignInvoices.campaignId, campaignId)).orderBy(asc(campaignInvoices.createdAt));
-  const spendTotal = spend.reduce((sum, item) => sum.add(new Decimal(item.amount)), new Decimal(0));
+  const spendRows = spend.rows as Array<{ amount: string; reversed: boolean }>;\n  const spendTotal = spendRows.reduce((sum, item) => item.reversed ? sum : sum.add(new Decimal(item.amount)), new Decimal(0));
   const estimatedProfit = new Decimal(row.grossAmount).sub(spendTotal);
   const estimatedPartnerShare = estimatedProfit.mul(new Decimal(row.partnerSharePercent)).div(100);
-  return { campaign: row, spend, invoices: invoicesLinked, financialSnapshot: { spendTotal: spendTotal.toFixed(), estimatedProfit: estimatedProfit.toFixed(), estimatedPartnerShare: estimatedPartnerShare.toFixed() } };
+  return { campaign: row, spend: spend.rows, invoices: invoicesLinked, financialSnapshot: { spendTotal: spendTotal.toFixed(), estimatedProfit: estimatedProfit.toFixed(), estimatedPartnerShare: estimatedPartnerShare.toFixed() } };
 }
 
 export async function listCampaigns(db: Database, actorId: string, privileged: boolean, partnerUserId?: string) {
@@ -138,5 +138,34 @@ export async function recordCampaignSpend(db: Database, campaignId: string, inpu
   if (!entry) throw new ApplicationError("CAMPAIGN_SPEND_CREATE_FAILED", 500, "تعذر تسجيل الإنفاق");
   await postCampaignSpendRecorded(db, entry.id, context);
   await recordAuditEvent(db, { actorId: context.actorId, action: "campaign.spend_recorded", resourceType: "campaign", resourceId: campaignId, requestId: context.requestId, idempotencyKey: context.idempotencyKey, metadata: { amount: input.amount, currencyCode: input.currencyCode, spendId: entry.id } });
+  return getCampaign(db, campaignId, context.actorId, privileged);
+}
+
+
+export const reverseCampaignSpendInputSchema = z.object({
+  reason: z.string().trim().min(1).max(1000)
+});
+
+export async function reverseCampaignSpendEntry(
+  db: Database,
+  campaignId: string,
+  spendId: string,
+  input: z.infer<typeof reverseCampaignSpendInputSchema>,
+  context: { actorId: string; requestId: string; idempotencyKey: string },
+  privileged: boolean
+) {
+  const campaign = await assertCampaignAccess(db, campaignId, context.actorId, privileged) ?? await getCampaignRow(db, campaignId);
+  const rows = await db.execute(sql`SELECT id, campaign_id FROM campaign_spend_entries WHERE id = ${spendId}::uuid FOR UPDATE`);
+  const spend = rows.rows[0] as { id: string; campaign_id: string } | undefined;
+  if (!spend || spend.campaign_id !== campaign.id) throw new ApplicationError("CAMPAIGN_SPEND_NOT_FOUND", 404, "سجل الإنفاق غير موجود");
+  const existing = await db.select({ id: campaignSpendReversals.id }).from(campaignSpendReversals).where(eq(campaignSpendReversals.spendId, spendId)).limit(1);
+  if (existing[0]) throw new ApplicationError("CAMPAIGN_SPEND_ALREADY_REVERSED", 409, "تم عكس سجل الإنفاق مسبقاً");
+  const reversalId = randomUUID();
+  const [reversal] = await db.insert(campaignSpendReversals).values({
+    id: reversalId, spendId, reason: input.reason.trim(), reversedBy: context.actorId
+  }).returning();
+  if (!reversal) throw new ApplicationError("CAMPAIGN_SPEND_REVERSAL_FAILED", 500, "تعذر إنشاء عكس الإنفاق");
+  await import("../accounting/accounting-posting-service.js").then(({ reverseCampaignSpend }) => reverseCampaignSpend(db, spendId, context));
+  await recordAuditEvent(db, { actorId: context.actorId, action: "campaign.spend_reversed", resourceType: "campaign", resourceId: campaignId, requestId: context.requestId, idempotencyKey: context.idempotencyKey, metadata: { spendId, reversalId, reason: input.reason.trim() } });
   return getCampaign(db, campaignId, context.actorId, privileged);
 }
