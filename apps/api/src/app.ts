@@ -25,7 +25,7 @@ import { campaignStatusInputSchema, createCampaign, createCampaignInputSchema, g
 import { completeEmployeeTask, createCompensationRule, createCompensationRuleInputSchema, createEmployeeTask, createEmployeeTaskInputSchema, listCompensationRules, listEmployeeTasks } from "./application/employees/employee-service.js";
 import { createExpense, createExpenseInputSchema, listExpenses, voidExpense, voidExpenseInputSchema } from "./application/expenses/expense-service.js";
 import { closePeriod, createAccount, createAccountInputSchema, createJournal, createJournalInputSchema, createPeriod, createPeriodInputSchema, createReversalInputSchema, getJournal, listAccounts, listPeriods, postJournal, reverseJournal } from "./application/accounting/accounting-service.js";
-import { generalLedger, trialBalance } from "./application/accounting/accounting-report-service.js";
+import { balanceSheet, generalLedger, incomeStatement, trialBalance } from "./application/accounting/accounting-report-service.js";
 import { reconcileOperationalJournals } from "./application/accounting/accounting-reconciliation-service.js";
 import { getLatestExchangeRate, setExchangeRate, setExchangeRateInputSchema } from "./application/exchange/exchange-service.js";
 
@@ -641,6 +641,26 @@ export function buildApp(dependencies: {
     if(!request.principal)return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});assertPermission(request.principal,"accounting.journal.read");
     if(!/^[0-9a-fA-F-]{36}$/.test(request.params.accountId))return reply.status(400).send({error:"VALIDATION_ERROR",message:"معرّف الحساب غير صالح"});
     const q=request.query as {startDate?:string;endDate?:string};if(!q.startDate||!q.endDate||!/^\d{4}-\d{2}-\d{2}$/.test(q.startDate)||!/^\d{4}-\d{2}-\d{2}$/.test(q.endDate))return reply.status(400).send({error:"VALIDATION_ERROR",message:"يجب تحديد نطاق تاريخ صحيح"});return reply.send({data:await generalLedger(dependencies.db,request.params.accountId,q.startDate,q.endDate)});
+  });
+
+  app.get("/api/v1/accounting/reports/income-statement", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});
+    assertPermission(request.principal,"accounting.journal.read");
+    const q=request.query as {startDate?:string;endDate?:string};
+    if (!q.startDate || !q.endDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(q.startDate) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(q.endDate) || q.endDate < q.startDate) {
+      return reply.status(400).send({error:"VALIDATION_ERROR",message:"يجب تحديد نطاق تاريخ صحيح"});
+    }
+    return reply.send({data:await incomeStatement(dependencies.db,q.startDate,q.endDate)});
+  });
+
+  app.get("/api/v1/accounting/reports/balance-sheet", async (request, reply) => {
+    if (!request.principal) return reply.status(401).send({error:"UNAUTHORIZED",message:"المصادقة مطلوبة"});
+    assertPermission(request.principal,"accounting.journal.read");
+    const q=request.query as {asOfDate?:string};
+    if (!q.asOfDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(q.asOfDate)) {
+      return reply.status(400).send({error:"VALIDATION_ERROR",message:"يجب تحديد تاريخ صحيح"});
+    }
+    return reply.send({data:await balanceSheet(dependencies.db,q.asOfDate)});
   });
 
   app.get("/api/v1/accounting/reconciliation", async (request, reply) => {
