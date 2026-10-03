@@ -65,7 +65,7 @@ function assertDriverAccess(session: { driverUserId: string }, actorId: string):
 export async function openCollection(
   db: Database,
   input: z.infer<typeof openCollectionInputSchema>,
-  context: { actorId: string }
+  context: { actorId: string; requestId: string; idempotencyKey: string }
 ) {
   if (input.driverUserId !== context.actorId) {
     throw new ApplicationError("COLLECTION_DRIVER_MISMATCH", 403, "يمكن للسائق فتح جلسة التحصيل الخاصة به فقط");
@@ -88,6 +88,16 @@ export async function openCollection(
   }).returning();
 
   if (!session) throw new ApplicationError("COLLECTION_CREATE_FAILED", 500, "تعذر فتح جلسة التحصيل");
+
+  await recordAuditEvent(db, {
+    actorId: context.actorId,
+    action: "collection.open",
+    resourceType: "driver_collection_session",
+    resourceId: session.id,
+    requestId: context.requestId,
+    idempotencyKey: context.idempotencyKey
+  });
+
   return session;
 }
 
@@ -134,6 +144,16 @@ export async function addCollectionPayment(
 
   const created = await recordDeliveryCollection(db, input.deliveryOrderId, sessionId, input, context);
 
+  await recordAuditEvent(db, {
+    actorId: context.actorId,
+    action: "collection.payment_linked",
+    resourceType: "driver_collection_session",
+    resourceId: sessionId,
+    requestId: context.requestId,
+    idempotencyKey: context.idempotencyKey,
+    metadata: { deliveryOrderId: input.deliveryOrderId, paymentId: created.paymentId }
+  });
+
   return created;
 }
 
@@ -141,7 +161,7 @@ export async function closeCollection(
   db: Database,
   sessionId: string,
   input: z.infer<typeof closeCollectionInputSchema>,
-  context: { actorId: string }
+  context: { actorId: string; requestId: string; idempotencyKey: string }
 ) {
   const rows = await db.execute(sql<{ id: string; driver_user_id: string; status: string }>`SELECT id, driver_user_id, status FROM driver_collection_sessions WHERE id = ${sessionId}::uuid FOR UPDATE`);
   const session = rows.rows[0];
@@ -193,6 +213,15 @@ export async function closeCollection(
   await db.update(driverCollectionSessions)
     .set({ status: "closed", closedAt: now, closedBy: context.actorId, notes: input.notes?.trim() || null, updatedAt: now })
     .where(eq(driverCollectionSessions.id, sessionId));
+
+  await recordAuditEvent(db, {
+    actorId: context.actorId,
+    action: "collection.close",
+    resourceType: "driver_collection_session",
+    resourceId: sessionId,
+    requestId: context.requestId,
+    idempotencyKey: context.idempotencyKey
+  });
 
   return getCollection(db, sessionId, context.actorId);
 }
