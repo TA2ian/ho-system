@@ -1045,7 +1045,7 @@ export function buildApp(dependencies: {
       const idem = await beginIdempotency(tx, scope, key, requestHash);
       if (idem.kind === "replay") return idem;
       if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
-      const created = await openCollection(tx, parsed.data, { actorId: request.principal!.userId });
+      const created = await openCollection(tx, parsed.data, { actorId: request.principal!.userId, requestId: request.id, idempotencyKey: key });
       const body = { data: created };
       await completeIdempotency(tx, idem.id, 201, body);
       return { kind: "new" as const, status: 201, body };
@@ -1102,7 +1102,7 @@ export function buildApp(dependencies: {
       const idem = await beginIdempotency(tx, scope, key, requestHash);
       if (idem.kind === "replay") return idem;
       if (idem.kind === "conflict") throw new ApplicationError(idem.reason === "KEY_REUSED" ? "IDEMPOTENCY_KEY_REUSED" : "IDEMPOTENCY_IN_PROGRESS", 409, idem.reason === "KEY_REUSED" ? "تم استخدام مفتاح Idempotency-Key مع بيانات مختلفة" : "الطلب نفسه قيد المعالجة");
-      const closed = await closeCollection(tx, request.params.id, parsed.data, { actorId: request.principal!.userId });
+      const closed = await closeCollection(tx, request.params.id, parsed.data, { actorId: request.principal!.userId, requestId: request.id, idempotencyKey: key });
       const body = { data: closed };
       await completeIdempotency(tx, idem.id, 200, body);
       return { kind: "new" as const, status: 200, body };
