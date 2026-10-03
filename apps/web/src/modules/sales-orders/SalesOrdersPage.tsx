@@ -1,18 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import type { ApiClient } from "../../api/client";
+import { DataTable, type Column } from "../../components/common/DataTable";
+import { Pagination } from "../../components/common/Pagination";
+import { StatusBadge } from "../../components/common/StatusBadge";
+import { FeedbackState } from "../../components/common/FeedbackState";
+import { ResponsiveCardList } from "../../components/common/ResponsiveCardList";
+import { ConfirmDialog } from "../../components/dialogs/ConfirmDialog";
+import {
+  CreateSalesOrderDialog,
+  type CustomerRef,
+  type CatalogItemRef,
+} from "./CreateSalesOrderDialog";
 
-type Page<T> = { data: T[]; meta: { limit: number; offset: number; hasMore: boolean } };
-type Customer = { id: string; displayName: string; status: string };
-type CatalogItem = {
-  id: string;
-  code: string;
-  name: string;
-  unit: string;
-  currencyCode: string;
-  salePrice: string;
-  isActive: boolean;
-};
-type SalesOrder = {
+interface SalesOrdersPageProps {
+  api: ApiClient;
+}
+
+export interface SalesOrder {
   id: string;
   customerId: string;
   orderNumber: string;
@@ -21,207 +25,517 @@ type SalesOrder = {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
-};
-type OrderLine = {
-  catalogItemId: string;
-  quantity: string;
-};
+}
 
-const statusLabels: Record<SalesOrder["status"], string> = {
-  draft: "مسودة",
-  confirmed: "مؤكد",
-  cancelled: "ملغى"
-};
+interface OrdersApiResponse {
+  data: SalesOrder[];
+  meta: {
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
+}
 
-export function SalesOrdersPage({ api }: { api: ApiClient }) {
+interface GenericPageResponse<T> {
+  data: T[];
+  meta: {
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
+}
+
+export const SalesOrdersPage: React.FC<SalesOrdersPageProps> = ({ api }) => {
   const limit = 25;
-  const [orders, setOrders] = useState<Page<SalesOrder> | null>(null);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [items, setItems] = useState<CatalogItem[]>([]);
-  const [offset, setOffset] = useState(0);
+  const [ordersPage, setOrdersPage] = useState<OrdersApiResponse | null>(null);
+  const [offset, setOffset] = useState<number>(0);
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
-  const [customerId, setCustomerId] = useState("");
-  const [currencyCode, setCurrencyCode] = useState("");
-  const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState<OrderLine[]>([{ catalogItemId: "", quantity: "1" }]);
-  const [creating, setCreating] = useState(false);
-  const [transitioning, setTransitioning] = useState<string | null>(null);
 
-  const customerById = useMemo(() => new Map(customers.map((customer) => [customer.id, customer.displayName])), [customers]);
-  const currencies = useMemo(() => [...new Set(items.map((item) => item.currencyCode))].sort(), [items]);
-  const currencyItems = useMemo(
-    () => items.filter((item) => item.currencyCode === currencyCode),
-    [items, currencyCode]
+  // References state
+  const [customers, setCustomers] = useState<CustomerRef[]>([]);
+  const [catalogItems, setCatalogItems] = useState<CatalogItemRef[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+
+  // UI interaction states
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "confirmed" | "cancelled">("all");
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Confirm/Cancel action dialog states
+  const [pendingAction, setPendingAction] = useState<{
+    order: SalesOrder;
+    action: "confirm" | "cancel";
+  } | null>(null);
+  const [isActionProcessing, setIsActionProcessing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  // Customer ID to DisplayName map
+  const customerById = useMemo(() => {
+    return new Map(customers.map((c) => [c.id, c.displayName]));
+  }, [customers]);
+
+  // Load orders with decoupled offset dependency for robust pagination
+  const loadOrders = useCallback(
+    async (targetOffset: number) => {
+      setState("loading");
+      setError(null);
+      try {
+        const response = await api.get<OrdersApiResponse>(
+          `sales-orders?limit=${limit}&offset=${targetOffset}`
+        );
+        setOrdersPage(response);
+        setOffset(targetOffset);
+        setState("idle");
+      } catch (err) {
+        setState("error");
+        setError(err instanceof Error ? err.message : "تعذر استرجاع طلبات البيع من الخادم.");
+      }
+    },
+    [api, limit]
   );
 
-  async function loadOrders(nextOffset = offset) {
-    setState("loading");
-    setError(null);
+  // Load reference customers and catalog items
+  const loadReferences = useCallback(async () => {
+    setCustomersLoading(true);
+    setCatalogLoading(true);
     try {
-      setOrders(await api.get<Page<SalesOrder>>(`sales-orders?limit=${limit}&offset=${nextOffset}`));
-      setOffset(nextOffset);
-      setState("idle");
-    } catch (e) {
-      setState("error");
-      setError(e instanceof Error ? e.message : "تعذر تحميل طلبات البيع.");
-    }
-  }
-
-  async function loadReferences() {
-    try {
-      const [customerPage, itemPage] = await Promise.all([
-        api.get<Page<Customer>>("customers?limit=200&offset=0"),
-        api.get<Page<CatalogItem>>("catalog/items?limit=200&offset=0")
+      const [custRes, catRes] = await Promise.all([
+        api.get<GenericPageResponse<CustomerRef>>("customers?limit=200&offset=0"),
+        api.get<GenericPageResponse<CatalogItemRef>>("catalog/items?limit=200&offset=0"),
       ]);
-      setCustomers(customerPage.data);
-      setItems(itemPage.data);
-      if (!currencyCode && itemPage.data[0]) setCurrencyCode(itemPage.data[0].currencyCode);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "تعذر تحميل العملاء والكتالوج.");
+      setCustomers(custRes.data);
+      setCatalogItems(catRes.data);
+    } catch {
+      // Non-fatal reference loading error, will show empty options with retry option
+    } finally {
+      setCustomersLoading(false);
+      setCatalogLoading(false);
     }
-  }
+  }, [api]);
 
   useEffect(() => {
-    void loadReferences();
     void loadOrders(0);
-  }, []);
+    void loadReferences();
+  }, [loadOrders, loadReferences]);
 
-  function updateLine(index: number, patch: Partial<OrderLine>) {
-    setLines((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, ...patch } : line));
-  }
+  const handleOrderCreated = () => {
+    setToastMessage("تم إنشاء طلب البيع بنجاح بحالة مسودة (Draft).");
+    setTimeout(() => setToastMessage(null), 5000);
+    void loadOrders(offset);
+  };
 
-  function addLine() {
-    setLines((current) => [...current, { catalogItemId: "", quantity: "1" }]);
-  }
+  const handleConfirmAction = async () => {
+    if (!pendingAction) return;
+    setIsActionProcessing(true);
+    setActionError(null);
 
-  function removeLine(index: number) {
-    setLines((current) => current.length === 1 ? current : current.filter((_, lineIndex) => lineIndex !== index));
-  }
-
-  async function createOrder() {
-    const selectedLines = lines.filter((line) => line.catalogItemId.trim());
-    if (!customerId) return setError("اختر العميل.");
-    if (!currencyCode) return setError("لا توجد عملة متاحة في الكتالوج.");
-    if (!selectedLines.length) return setError("أضف عنصرًا واحدًا على الأقل.");
-    if (selectedLines.some((line) => !/^\d+(\.\d{1,10})?$/.test(line.quantity) || Number(line.quantity) <= 0)) {
-      return setError("كل كمية يجب أن تكون رقمًا أكبر من صفر.");
-    }
-
-    setCreating(true);
-    setError(null);
+    const { order, action } = pendingAction;
     try {
-      await api.post(
-        "sales-orders",
-        {
-          customerId,
-          currencyCode,
-          notes: notes.trim() || null,
-          lines: selectedLines
-        },
-        crypto.randomUUID()
+      const idempotencyKey = crypto.randomUUID();
+      await api.post(`sales-orders/${order.id}/${action}`, {}, idempotencyKey);
+
+      setToastMessage(
+        action === "confirm"
+          ? `تم تأكيد الطلب ${order.orderNumber} بنجاح.`
+          : `تم إلغاء الطلب ${order.orderNumber}.`
       );
-      setCustomerId("");
-      setNotes("");
-      setLines([{ catalogItemId: "", quantity: "1" }]);
-      await loadOrders(0);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "تعذر إنشاء طلب البيع.");
-    } finally {
-      setCreating(false);
-    }
-  }
+      setTimeout(() => setToastMessage(null), 5000);
 
-  async function transition(orderId: string, action: "confirm" | "cancel") {
-    setTransitioning(orderId);
-    setError(null);
-    try {
-      await api.post(`sales-orders/${orderId}/${action}`, {}, crypto.randomUUID());
+      setPendingAction(null);
       await loadOrders(offset);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "تعذر تحديث طلب البيع.");
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "تعذر تنفيذ العملية عبر الـ API.");
     } finally {
-      setTransitioning(null);
+      setIsActionProcessing(false);
     }
-  }
+  };
 
-  return <div className="sales-orders-page">
-    <section className="panel">
-      <div className="section-heading">
-        <div><span className="eyebrow">دورة طلب البيع</span><h2>إنشاء طلب جديد</h2></div>
-      </div>
-      <div className="form-grid">
-        <label>العميل
-          <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-            <option value="">اختر العميل</option>
-            {customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.displayName}</option>)}
-          </select>
-        </label>
-        <label>العملة
-          <select value={currencyCode} onChange={(e) => {
-            setCurrencyCode(e.target.value);
-            setLines([{ catalogItemId: "", quantity: "1" }]);
-          }}>
-            <option value="">اختر العملة</option>
-            {currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
-          </select>
-        </label>
-      </div>
-      <div className="order-lines">
-        {lines.map((line, index) => <div className="order-line" key={index}>
-          <label>العنصر
-            <select value={line.catalogItemId} onChange={(e) => updateLine(index, { catalogItemId: e.target.value })}>
-              <option value="">اختر العنصر</option>
-              {currencyItems.map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name} — {item.salePrice} / {item.unit}</option>)}
-            </select>
-          </label>
-          <label>الكمية
-            <input value={line.quantity} onChange={(e) => updateLine(index, { quantity: e.target.value })} inputMode="decimal" />
-          </label>
-          <button className="secondary" type="button" onClick={() => removeLine(index)} disabled={lines.length === 1}>حذف</button>
-        </div>)}
-      </div>
-      <div className="form-actions">
-        <button className="secondary" type="button" onClick={addLine}>إضافة سطر</button>
-        <label className="notes-field">ملاحظات
-          <input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
-        </label>
-        <button type="button" onClick={() => void createOrder()} disabled={creating}>{creating ? "جارٍ الإنشاء…" : "إنشاء طلب البيع"}</button>
-      </div>
-      {error && <p className="error" role="alert">{error}</p>}
-    </section>
+  // Safe client-side filtering on current page
+  const filteredOrders = useMemo(() => {
+    if (!ordersPage?.data) return [];
+    return ordersPage.data.filter((order) => {
+      const q = searchQuery.trim().toLowerCase();
+      const customerName = (customerById.get(order.customerId) || "").toLowerCase();
+      const matchesSearch =
+        !q ||
+        order.orderNumber.toLowerCase().includes(q) ||
+        customerName.includes(q) ||
+        (order.notes && order.notes.toLowerCase().includes(q));
 
-    <section className="panel">
-      <div className="section-heading">
-        <div><span className="eyebrow">السجل</span><h2>طلبات البيع</h2></div>
-        <button className="secondary" type="button" onClick={() => void loadOrders(offset)} disabled={state === "loading"}>تحديث</button>
+      const matchesStatus = statusFilter === "all" || order.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [ordersPage?.data, searchQuery, statusFilter, customerById]);
+
+  // Desktop table columns
+  const columns: Column<SalesOrder>[] = [
+    {
+      key: "orderNumber",
+      header: "رقم الطلب",
+      dir: "ltr",
+      render: (order) => (
+        <div>
+          <span style={{ fontWeight: 600, color: "var(--ho-color-text)" }}>
+            {order.orderNumber}
+          </span>
+          {order.notes && (
+            <div style={{ fontSize: "0.75rem", color: "var(--ho-color-text-muted)" }}>
+              {order.notes}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "customerId",
+      header: "العميل",
+      render: (order) => (
+        <span>{customerById.get(order.customerId) || order.customerId}</span>
+      ),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      render: (order) => <StatusBadge status={order.status} />,
+    },
+    {
+      key: "currencyCode",
+      header: "العملة",
+      dir: "ltr",
+      render: (order) => <code>{order.currencyCode}</code>,
+    },
+    {
+      key: "createdAt",
+      header: "تاريخ الإنشاء",
+      dir: "ltr",
+      render: (order) => (
+        <span style={{ fontSize: "0.8125rem" }}>
+          {new Date(order.createdAt).toLocaleDateString("ar-EG", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </span>
+      ),
+    },
+    {
+      key: "id",
+      header: "الإجراءات",
+      render: (order) => {
+        if (order.status !== "draft") {
+          return <span className="muted" style={{ fontSize: "0.8125rem" }}>لا توجد إجراءات متاحة</span>;
+        }
+        return (
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button
+              type="button"
+              className="ho-btn ho-btn-secondary ho-btn-sm"
+              onClick={() => setPendingAction({ order, action: "confirm" })}
+            >
+              تأكيد الطلب
+            </button>
+            <button
+              type="button"
+              className="ho-btn ho-btn-danger ho-btn-sm"
+              onClick={() => setPendingAction({ order, action: "cancel" })}
+            >
+              إلغاء
+            </button>
+          </div>
+        );
+      },
+    },
+  ];
+
+  // Mobile card render
+  const renderOrderCard = (order: SalesOrder) => (
+    <div className="ho-customer-card">
+      <div className="ho-customer-card-header">
+        <div>
+          <span className="ho-customer-card-title" dir="ltr">{order.orderNumber}</span>
+          <div style={{ fontSize: "0.875rem", color: "var(--ho-color-text)", marginTop: "0.25rem", fontWeight: 500 }}>
+            {customerById.get(order.customerId) || order.customerId}
+          </div>
+        </div>
+        <StatusBadge status={order.status} />
       </div>
-      {state === "loading" && <p className="muted">جارٍ تحميل الطلبات…</p>}
-      {orders && <div className="table-wrap">
-        <table>
-          <thead><tr><th>الطلب</th><th>العميل</th><th>الحالة</th><th>العملة</th><th>التاريخ</th><th>الإجراء</th></tr></thead>
-          <tbody>
-            {orders.data.length === 0 ? <tr><td colSpan={6}>لا توجد طلبات.</td></tr> : orders.data.map((order) => <tr key={order.id}>
-              <td dir="ltr">{order.orderNumber}</td>
-              <td>{customerById.get(order.customerId) || order.customerId}</td>
-              <td>{statusLabels[order.status]}</td>
-              <td dir="ltr">{order.currencyCode}</td>
-              <td dir="ltr">{new Date(order.createdAt).toLocaleString("ar-AE")}</td>
-              <td>
-                {order.status === "draft" ? <span className="row-actions">
-                  <button className="secondary" type="button" disabled={transitioning === order.id} onClick={() => void transition(order.id, "confirm")}>تأكيد</button>
-                  <button className="danger" type="button" disabled={transitioning === order.id} onClick={() => void transition(order.id, "cancel")}>إلغاء</button>
-                </span> : "—"}
-              </td>
-            </tr>)}
-          </tbody>
-        </table>
-      </div>}
-      {orders && <div className="pager">
-        <button className="secondary" type="button" disabled={offset === 0 || state === "loading"} onClick={() => void loadOrders(Math.max(0, offset - limit))}>السابق</button>
-        <span>الصفحة {Math.floor(offset / limit) + 1}</span>
-        <button className="secondary" type="button" disabled={!orders.meta.hasMore || state === "loading"} onClick={() => void loadOrders(offset + limit)}>التالي</button>
-      </div>}
-    </section>
-  </div>;
-}
+
+      <div className="ho-customer-card-details">
+        <div className="ho-customer-card-row">
+          <span>العملة:</span>
+          <code dir="ltr">{order.currencyCode}</code>
+        </div>
+        <div className="ho-customer-card-row">
+          <span>التاريخ:</span>
+          <span dir="ltr">
+            {new Date(order.createdAt).toLocaleDateString("ar-EG", {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })}
+          </span>
+        </div>
+        {order.notes && (
+          <div className="ho-customer-card-row">
+            <span>ملاحظات:</span>
+            <span>{order.notes}</span>
+          </div>
+        )}
+      </div>
+
+      {order.status === "draft" && (
+        <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "1px solid var(--ho-color-border, #e2e8f0)" }}>
+          <button
+            type="button"
+            className="ho-btn ho-btn-secondary ho-btn-sm"
+            style={{ flex: 1 }}
+            onClick={() => setPendingAction({ order, action: "confirm" })}
+          >
+            تأكيد الطلب
+          </button>
+          <button
+            type="button"
+            className="ho-btn ho-btn-danger ho-btn-sm"
+            style={{ flex: 1 }}
+            onClick={() => setPendingAction({ order, action: "cancel" })}
+          >
+            إلغاء الطلب
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="sales-orders-page">
+      {/* Toast Feedback */}
+      {toastMessage && (
+        <div
+          className="ho-alert ho-alert-success"
+          role="status"
+          aria-live="polite"
+          style={{ marginBottom: "1.25rem" }}
+        >
+          <span>✓</span>
+          <div>{toastMessage}</div>
+        </div>
+      )}
+
+      {/* Page Header */}
+      <header className="ho-page-header">
+        <div>
+          <h1 className="ho-page-header-title">طلبات البيع</h1>
+          <p className="ho-page-header-desc">
+            سجل وتفاصيل طلبات البيع في النظام وحالات الانتقال بين المسودة والتأكيد.
+          </p>
+        </div>
+        <div className="ho-page-header-actions">
+          <button
+            type="button"
+            className="ho-btn ho-btn-secondary"
+            onClick={() => {
+              void loadOrders(offset);
+              void loadReferences();
+            }}
+            disabled={state === "loading"}
+          >
+            تحديث
+          </button>
+          <button
+            type="button"
+            className="ho-btn ho-btn-primary"
+            onClick={() => setIsCreateOpen(true)}
+          >
+            + إنشاء طلب جديد
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <section className="panel" aria-label="قائمة طلبات البيع">
+        {/* Loading State */}
+        {state === "loading" && !ordersPage && (
+          <FeedbackState mode="loading" title="جارٍ تحميل طلبات البيع من الخادم..." />
+        )}
+
+        {/* Error State */}
+        {state === "error" && !ordersPage && (
+          <FeedbackState
+            mode="error"
+            title="تعذر تحميل طلبات البيع"
+            message={error || undefined}
+            onRetry={() => void loadOrders(offset)}
+          />
+        )}
+
+        {/* Empty State */}
+        {ordersPage && ordersPage.data.length === 0 && (
+          <FeedbackState
+            mode="empty"
+            title="لا توجد طلبات بيع مسجلة حاليًا"
+            message="لم يتم تسجيل أي طلب بيع في النظام حتى الآن. يمكنك البدء بإنشاء أول طلب عبر الزر أدناه."
+            onAction={() => setIsCreateOpen(true)}
+            actionLabel="إنشاء أول طلب بيع"
+          />
+        )}
+
+        {/* Loaded Data View */}
+        {ordersPage && ordersPage.data.length > 0 && (
+          <>
+            {/* Toolbar for quick filter */}
+            <div className="ho-toolbar" role="search" aria-label="تصفية طلبات البيع في الصفحة الحالية">
+              <div className="ho-toolbar-search">
+                <input
+                  type="search"
+                  className="ho-input ho-input-sm"
+                  placeholder="بحث سريع برقم الطلب، اسم العميل، أو الملاحظات..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label="بحث سريع في الصفحة الحالية"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    className="ho-btn ho-btn-secondary ho-btn-sm"
+                    onClick={() => setSearchQuery("")}
+                  >
+                    مسح
+                  </button>
+                )}
+              </div>
+
+              <div className="ho-toolbar-filters">
+                <label htmlFor="ho-so-status-filter" className="sr-only">
+                  تصفية حسب حالة الطلب
+                </label>
+                <select
+                  id="ho-so-status-filter"
+                  className="ho-select ho-select-sm"
+                  value={statusFilter}
+                  onChange={(e) =>
+                    setStatusFilter(e.target.value as "all" | "draft" | "confirmed" | "cancelled")
+                  }
+                >
+                  <option value="all">كافة الحالات ({ordersPage.data.length})</option>
+                  <option value="draft">المسودة (Draft)</option>
+                  <option value="confirmed">المؤكدة (Confirmed)</option>
+                  <option value="cancelled">الملغاة (Cancelled)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Empty Filter State */}
+            {filteredOrders.length === 0 ? (
+              <div style={{ padding: "2.5rem 1rem", textAlign: "center" }}>
+                <p className="muted" style={{ marginBottom: "1rem" }}>
+                  لا توجد نتائج مطابقة لمعايير البحث في هذه الصفحة.
+                </p>
+                <button
+                  type="button"
+                  className="ho-btn ho-btn-secondary ho-btn-sm"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setStatusFilter("all");
+                  }}
+                >
+                  إعادة ضبط التصفية
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Desktop View */}
+                <div className="ho-desktop-only">
+                  <DataTable<SalesOrder>
+                    data={filteredOrders}
+                    columns={columns}
+                    keyExtractor={(order) => order.id}
+                    caption="جدول طلبات البيع"
+                  />
+                </div>
+
+                {/* Mobile View */}
+                <div className="ho-mobile-only">
+                  <ResponsiveCardList<SalesOrder>
+                    items={filteredOrders}
+                    keyExtractor={(order) => order.id}
+                    renderCard={renderOrderCard}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Pagination Component */}
+            <Pagination
+              offset={offset}
+              limit={limit}
+              hasMore={ordersPage.meta.hasMore}
+              onPageChange={(newOffset) => void loadOrders(newOffset)}
+              disabled={state === "loading"}
+            />
+          </>
+        )}
+      </section>
+
+      {/* Create Sales Order Dialog */}
+      <CreateSalesOrderDialog
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onSuccess={handleOrderCreated}
+        api={api}
+        customers={customers}
+        catalogItems={catalogItems}
+        customersLoading={customersLoading}
+        catalogLoading={catalogLoading}
+      />
+
+      {/* Confirm Action Dialog */}
+      {pendingAction && (
+        <ConfirmDialog
+          isOpen={true}
+          title={
+            pendingAction.action === "confirm"
+              ? "تأكيد طلب البيع"
+              : "إلغاء طلب البيع"
+          }
+          description={
+            pendingAction.action === "confirm"
+              ? `هل أنت متأكد من رغبتك في تأكيد الطلب ${pendingAction.order.orderNumber}؟ سينتقل الطلب من حالة مسودة إلى مؤكد. لا تُنشئ هذه العملية أي قيود محاسبية أو ذمم مدينة.`
+              : `هل أنت متأكد من رغبتك في إلغاء الطلب ${pendingAction.order.orderNumber}؟ إلغاء الطلب انتقال نهائي من حالة مسودة إلى ملغى.`
+          }
+          confirmLabel={
+            pendingAction.action === "confirm" ? "تأكيد الطلب" : "إلغاء الطلب نهائيًا"
+          }
+          cancelLabel="تراجع"
+          isDestructive={pendingAction.action === "cancel"}
+          isProcessing={isActionProcessing}
+          onConfirm={() => void handleConfirmAction()}
+          onCancel={() => {
+            if (!isActionProcessing) {
+              setPendingAction(null);
+              setActionError(null);
+            }
+          }}
+        />
+      )}
+
+      {/* Action Error Alert if mutation fails */}
+      {actionError && (
+        <div
+          className="ho-alert ho-alert-danger"
+          role="alert"
+          style={{ marginTop: "1rem" }}
+        >
+          <span className="ho-alert-icon">⚠️</span>
+          <div className="ho-alert-content">
+            <strong>خطأ في تنفيذ الإجراء:</strong> {actionError}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

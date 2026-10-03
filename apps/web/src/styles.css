@@ -1051,3 +1051,13 @@ th {
   gap: 0.625rem;
   align-items: center;
 }
+
+.ho-dialog-lg {
+  max-width: 720px;
+  width: 100%;
+}
+
+.ho-order-lines-section {
+  border-top: 1px solid var(--ho-color-border, #e2e8f0);
+  padding-top: 1rem;
+}
