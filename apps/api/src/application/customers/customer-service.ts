@@ -6,6 +6,7 @@ import { customers } from "../../db/customer-schema.js";
 import { recordAuditEvent } from "../audit.js";
 import type { Customer } from "../../domain/customer.js";
 import { ApplicationError } from "../../domain/errors.js";
+import { pageRows, type Pagination } from "../pagination.js";
 
 export const createCustomerInputSchema = z.object({
   type: z.enum(["individual", "business"]),
@@ -64,7 +65,11 @@ export async function createCustomer(
   return toCustomer(row);
 }
 
-export async function listCustomers(db: Database): Promise<Customer[]> {
-  const rows = await db.select().from(customers).where(eq(customers.status, "active"));
-  return rows.map(toCustomer);
+export async function listCustomers(db: Database, pagination: Pagination) {
+  const rows = await db.select().from(customers)
+    .where(eq(customers.status, "active"))
+    .limit(pagination.limit + 1)
+    .offset(pagination.offset);
+  const page = pageRows(rows.map(toCustomer), pagination);
+  return page;
 }
